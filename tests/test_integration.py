@@ -1,31 +1,73 @@
+from __future__ import annotations
+
 import os
 import subprocess
 import sys
 import tempfile
+from pathlib import Path
+
 import yaml
+
 from tests.test_deb_adapter import create_dummy_deb
 
-def test_full_workflow():
+
+def run_cli(*args: str, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", "pisicevir.cli", *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        env=env,
+    )
+
+
+def test_reviewed_data_package_workflow() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        deb_path = os.path.join(tmpdir, "test.deb")
-        create_dummy_deb(deb_path)
-        
-        # 1. Inspect
-        subprocess.run([sys.executable, "-m", "pisicevir.cli", "inspect", deb_path], check=True)
-        
-        # 2. Classify
-        subprocess.run([sys.executable, "-m", "pisicevir.cli", "classify", deb_path], check=True)
-        
-        # 3. Plan
-        plan_path = os.path.join(tmpdir, "plan.yaml")
-        subprocess.run([sys.executable, "-m", "pisicevir.cli", "plan", deb_path, "--output", plan_path], check=True)
-        assert os.path.exists(plan_path)
-        
-        # 4. Generate
-        recipe_dir = os.path.join(tmpdir, "recipe")
-        subprocess.run([sys.executable, "-m", "pisicevir.cli", "generate", deb_path, "--plan", plan_path, "--output", recipe_dir], check=True)
-        assert os.path.exists(os.path.join(recipe_dir, "pspec.xml"))
-        assert os.path.exists(os.path.join(recipe_dir, "actions.py"))
-        
-        # 5. Lint
-        subprocess.run([sys.executable, "-m", "pisicevir.cli", "lint", recipe_dir], check=True)
+        package = os.path.join(tmpdir, "test.deb")
+        plan_path = Path(tmpdir, "plan.yaml")
+        recipe_dir = Path(tmpdir, "recipe")
+        create_dummy_deb(package)
+
+        classify = run_cli("classify", package)
+        assert classify.returncode == 0, classify.stderr
+        assert '"conversion_class": "A"' in classify.stdout
+
+        plan_result = run_cli(
+            "plan",
+            package,
+            "--homepage",
+            "https://example.test/test-pkg",
+            "--license",
+            "GPL-3.0-or-later",
+            "--packager-name",
+            "Test Packager",
+            "--packager-email",
+            "test@example.test",
+            "--output",
+            os.fspath(plan_path),
+        )
+        assert plan_result.returncode == 0, plan_result.stderr
+
+        plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+        assert plan["approved"] is False
+        plan["approved"] = True
+        plan_path.write_text(yaml.safe_dump(plan, sort_keys=False), encoding="utf-8")
+
+        environment = dict(os.environ)
+        environment["SOURCE_DATE_EPOCH"] = "1672531200"
+        generate = run_cli(
+            "generate",
+            package,
+            "--plan",
+            os.fspath(plan_path),
+            "--output",
+            os.fspath(recipe_dir),
+            env=environment,
+        )
+        assert generate.returncode == 0, generate.stderr
+
+        lint = run_cli("lint", os.fspath(recipe_dir), "--strict")
+        assert lint.returncode == 0, lint.stdout + lint.stderr
+        assert (recipe_dir / "files/test.deb").is_file()
+        assert (recipe_dir / "metadata/inspection.json").is_file()
+        assert "sha256sum=" in (recipe_dir / "pspec.xml").read_text(encoding="utf-8")
