@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pisicevir"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Policy-driven external package importer and native PISI recipe generator"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -27,6 +27,9 @@ pisicevir-gui = "pisicevir.gui:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
+[tool.setuptools.dynamic]
+version = { attr = "pisicevir.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
