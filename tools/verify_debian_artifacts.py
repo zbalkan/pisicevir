@@ -5,7 +5,7 @@ import argparse
 import subprocess
 import tarfile
 from pathlib import PurePosixPath
-from typing import Iterable, Optional, Sequence
+from typing import Optional, Sequence
 
 
 FORBIDDEN_PARTS = {
@@ -17,7 +17,7 @@ FORBIDDEN_PARTS = {
     "tools",
     "debian",
 }
-FORBIDDEN_SUFFIXES = {".pyc", ".pyo", ".egg-info"}
+FORBIDDEN_SUFFIXES = {".pyc", ".pyo"}
 
 
 def package_paths(package: str) -> list[str]:
@@ -26,19 +26,21 @@ def package_paths(package: str) -> list[str]:
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    assert process.stdout is not None
+    if process.stdout is None or process.stderr is None:
+        raise RuntimeError("Unable to capture dpkg-deb output")
+
     paths: list[str] = []
-    try:
-        with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
-            for member in archive:
-                path = member.name
-                while path.startswith("./"):
-                    path = path[2:]
-                if path and path != ".":
-                    paths.append(path)
-    finally:
-        _, stderr = process.communicate()
-    if process.returncode != 0:
+    with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
+        for member in archive:
+            path = member.name
+            while path.startswith("./"):
+                path = path[2:]
+            if path and path != ".":
+                paths.append(path)
+    process.stdout.close()
+    stderr = process.stderr.read()
+    return_code = process.wait()
+    if return_code != 0:
         raise RuntimeError(stderr.decode("utf-8", errors="replace"))
     return sorted(paths)
 
@@ -52,6 +54,8 @@ def verify(package: str) -> None:
         path = PurePosixPath(raw_path)
         if FORBIDDEN_PARTS.intersection(path.parts):
             raise ValueError(f"Forbidden build path in {package}: {raw_path}")
+        if any(part.endswith(".egg-info") for part in path.parts):
+            raise ValueError(f"Legacy egg metadata leaked into {package}: {raw_path}")
         if any(raw_path.endswith(suffix) for suffix in FORBIDDEN_SUFFIXES):
             raise ValueError(f"Forbidden generated file in {package}: {raw_path}")
 
