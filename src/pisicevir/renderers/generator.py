@@ -25,6 +25,8 @@ from pisicevir.renderers.pspec import PspecRenderer
 
 
 class RecipeGenerator:
+    SUPPORTED_CLASSES = {"A", "B"}
+
     def __init__(
         self,
         source_path: str,
@@ -70,6 +72,8 @@ class RecipeGenerator:
             "source_file": self.source_path.name,
             "source_sha1": self._hash_file(self.source_path, "sha1"),
             "source_sha256": self.inspection["sha256"],
+            "source_dependencies": self._expected_dependency_groups(),
+            "mapped_runtime_dependencies": self._mapped_runtime_dependencies(),
             "policy_family": self.plan["policy_family"],
             "conversion_class": self.plan["conversion_class"],
         }
@@ -90,6 +94,12 @@ class RecipeGenerator:
             raise ValueError("Only Debian source plans are currently supported")
         if self.plan.get("source_sha256") != self.inspection.get("sha256"):
             raise ValueError("Transformation plan does not match the inspected source package")
+        if self.plan.get("conversion_class") not in self.SUPPORTED_CLASSES:
+            raise ValueError(
+                "Automatic recipe generation currently supports only Class A and B packages"
+            )
+        if self.plan.get("policy_family") == "native-review":
+            raise ValueError("Packages requiring native review cannot be generated automatically")
 
         packager = self.plan.get("packager", {})
         if not packager.get("name") or not packager.get("email"):
@@ -100,6 +110,54 @@ class RecipeGenerator:
         if not licenses or any(value in {"UNKNOWN", "NOASSERTION"} for value in licenses):
             raise ValueError("Plan must define reviewed package licensing")
 
+        self._validate_dependency_decisions()
+        self._validate_payload_decisions()
+
+    def _validate_dependency_decisions(self) -> None:
+        expected = set(self._expected_dependency_groups())
+        dependency_plan = self.plan.get("dependencies", {})
+        declared_required = dependency_plan.get("required", [])
+        if not isinstance(declared_required, list) or set(declared_required) != expected:
+            raise ValueError(
+                "Dependency plan does not match the dependency groups inspected from the source"
+            )
+
+        mapping = dependency_plan.get("map", {})
+        if not isinstance(mapping, dict):
+            raise ValueError("Dependency map must be a mapping")
+        mapped: set[str] = set()
+        for source_group, target_package in mapping.items():
+            if source_group not in expected:
+                raise ValueError(f"Dependency map contains an unknown group: {source_group}")
+            if not isinstance(target_package, str) or not target_package.strip():
+                raise ValueError(f"Dependency mapping has no target: {source_group}")
+            mapped.add(source_group)
+
+        ignored: set[str] = set()
+        for item in dependency_plan.get("ignore", []):
+            if not isinstance(item, dict):
+                raise ValueError("Ignored dependencies require source and reason fields")
+            source_group = item.get("source")
+            reason = item.get("reason")
+            if source_group not in expected:
+                raise ValueError(f"Ignored dependency is unknown: {source_group}")
+            if not isinstance(reason, str) or not reason.strip():
+                raise ValueError(f"Ignored dependency has no justification: {source_group}")
+            ignored.add(source_group)
+
+        overlap = mapped & ignored
+        if overlap:
+            raise ValueError(
+                "Dependencies cannot be both mapped and ignored: " + ", ".join(sorted(overlap))
+            )
+        undecided = expected - mapped - ignored
+        if undecided:
+            raise ValueError(
+                "Required Debian dependencies are unresolved: "
+                + ", ".join(sorted(undecided))
+            )
+
+    def _validate_payload_decisions(self) -> None:
         payload = {entry["path"]: entry for entry in self.inspection["payload"]}
         install = self.plan.get("install", {})
         operations = [
@@ -135,13 +193,14 @@ class RecipeGenerator:
             targets.add(target)
 
         for raw_omission in omitted:
-            source = (
-                raw_omission.get("source")
-                if isinstance(raw_omission, dict)
-                else raw_omission
-            )
+            if not isinstance(raw_omission, dict):
+                raise ValueError("Omitted payload entries require source and reason fields")
+            source = raw_omission.get("source")
+            reason = raw_omission.get("reason")
             if not isinstance(source, str) or not source.startswith("payload/"):
                 raise ValueError("Every omission must identify a payload/ source")
+            if not isinstance(reason, str) or not reason.strip():
+                raise ValueError(f"Omitted payload entry has no justification: {source}")
             relative_source = source.removeprefix("payload/")
             if relative_source not in payload:
                 raise ValueError(f"Omitted source is not present in the package: {source}")
@@ -168,16 +227,7 @@ class RecipeGenerator:
             name=packager_data["name"], email=packager_data["email"]
         )
 
-        runtime_dependencies = sorted(
-            {
-                mapped
-                for mapped in self.plan.get("dependencies", {}).get("map", {}).values()
-                if mapped
-            }
-        )
-        file_paths = self._target_paths()
         source_sha1 = self._hash_file(self.source_path, "sha1")
-
         source = PisiSource(
             name=package_name,
             homepage=self.plan["homepage"],
@@ -197,9 +247,9 @@ class RecipeGenerator:
             summary=summary,
             description=description,
             runtime_dependencies=[
-                PisiDependency(name=name) for name in runtime_dependencies
+                PisiDependency(name=name) for name in self._mapped_runtime_dependencies()
             ],
-            files=file_paths,
+            files=self._target_paths(),
         )
         history = PisiHistoryEntry(
             version=source_version,
@@ -210,6 +260,17 @@ class RecipeGenerator:
             comment=f"Generated from reviewed Debian package {metadata['Version']}",
         )
         return PisiRecipe(source=source, packages=[package], history=[history])
+
+    def _expected_dependency_groups(self) -> List[str]:
+        return [
+            group["raw"]
+            for field in ("Pre-Depends", "Depends")
+            for group in self.inspection.get("dependencies", {}).get(field, [])
+        ]
+
+    def _mapped_runtime_dependencies(self) -> List[str]:
+        mapping = self.plan.get("dependencies", {}).get("map", {})
+        return sorted({target.strip() for target in mapping.values() if target.strip()})
 
     def _target_paths(self) -> List[PisiFilePath]:
         paths: Dict[str, PisiFilePath] = {}
