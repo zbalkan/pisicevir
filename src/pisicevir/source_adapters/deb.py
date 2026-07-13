@@ -12,6 +12,7 @@ from typing import BinaryIO, Dict, Iterable, List, Optional
 
 import zstandard
 
+from pisicevir.analysis.dependencies import parse_dependency_fields
 from pisicevir.models.source import DebInspection, PayloadEntry
 
 
@@ -54,6 +55,7 @@ class DebAdapter:
             sha256=self._sha256_file(self.path),
             architecture=metadata.get("Architecture"),
             metadata=metadata,
+            dependencies=parse_dependency_fields(metadata),
             payload=payload,
             maintainer_scripts=scripts,
             conffiles=conffiles,
