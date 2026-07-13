@@ -1,6 +1,0 @@
-pisicevir (0.1.0-1) unstable; urgency=medium
-
-  * Initial Debian packaging for the clean-room Pisicevir implementation.
-  * Split the command-line application and optional Qt interface.
-
- -- Caracal Project <maintainers@example.invalid>  Tue, 14 Jul 2026 00:00:00 +0300
