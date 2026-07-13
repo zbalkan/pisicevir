@@ -16,6 +16,8 @@ Build-Depends:
  dh-sequence-python3,
  pybuild-plugin-pyproject,
  python3-all,
+ python3-build,
+ python3-wheel,
  python3-setuptools,
  python3-pytest,
  python3-pytestqt,
