@@ -13,9 +13,11 @@ class RecipeLinter:
     def __init__(self, recipe_dir: str):
         self.recipe_dir = Path(recipe_dir)
         self.findings: List[Dict[str, Any]] = []
+        self.binary_archive = False
 
     def lint(self) -> List[Dict[str, Any]]:
         self.findings = []
+        self.binary_archive = False
         self._check_files_exist()
         self._check_pspec_xml()
         self._check_actions_py()
@@ -61,7 +63,15 @@ class RecipeLinter:
             self._add_finding("PSPEC005", "ERROR", "Missing <History>")
 
         if source is not None:
-            for child in ("Name", "Homepage", "Packager", "License", "Summary", "Description", "Archive"):
+            for child in (
+                "Name",
+                "Homepage",
+                "Packager",
+                "License",
+                "Summary",
+                "Description",
+                "Archive",
+            ):
                 if source.find(child) is None:
                     self._add_finding(
                         "PSPEC006", "ERROR", f"Source is missing <{child}>"
@@ -69,13 +79,11 @@ class RecipeLinter:
             archive = source.find("Archive")
             if archive is not None:
                 sha1 = archive.get("sha1sum", "")
-                sha256 = archive.get("sha256sum", "")
                 if not re.fullmatch(r"[0-9a-fA-F]{40}", sha1):
                     self._add_finding("PSPEC007", "ERROR", "Archive has an invalid SHA-1")
-                if not re.fullmatch(r"[0-9a-fA-F]{64}", sha256):
-                    self._add_finding("PSPEC008", "ERROR", "Archive has an invalid SHA-256")
                 if not (archive.text or "").strip():
-                    self._add_finding("PSPEC009", "ERROR", "Archive URI is empty")
+                    self._add_finding("PSPEC008", "ERROR", "Archive URI is empty")
+                self.binary_archive = archive.get("type") == "binary"
 
         seen_paths: set[str] = set()
         for package in packages:
@@ -149,6 +157,10 @@ class RecipeLinter:
         }
         if "install" not in functions:
             self._add_finding("ACT002", "ERROR", "actions.py must define install()")
+        if self.binary_archive and "setup" not in functions:
+            self._add_finding(
+                "ACT008", "ERROR", "Binary archive recipes must define setup()"
+            )
 
         imported_modules: set[str] = set()
         for node in ast.walk(tree):
@@ -160,7 +172,12 @@ class RecipeLinter:
 
             if isinstance(node, ast.Call):
                 name = self._call_name(node.func)
-                if name in {"os.system", "subprocess.run", "subprocess.call", "subprocess.Popen"}:
+                if name in {
+                    "os.system",
+                    "subprocess.run",
+                    "subprocess.call",
+                    "subprocess.Popen",
+                }:
                     self._add_finding(
                         "ACT003", "ERROR", f"Unsafe external command execution: {name}"
                     )
