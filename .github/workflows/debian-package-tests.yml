@@ -204,8 +204,24 @@ jobs:
       - name: Lint and inspect package payloads
         run: |
           set -euo pipefail
-          lintian --fail-on error /tmp/pisicevir-build-1/*.changes
-          python tools/verify_debian_artifacts.py /tmp/pisicevir-build-1/*.deb
+          log=/tmp/pisicevir-build-logs/post-build-validation.log
+          if ! {
+            lintian --fail-on error /tmp/pisicevir-build-1/*.changes
+            python tools/verify_debian_artifacts.py /tmp/pisicevir-build-1/*.deb
+          } >"$log" 2>&1; then
+            cat "$log"
+            exit 1
+          fi
+          cat "$log"
+
+      - name: Upload post-build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debian-post-build-diagnostics-${{ github.run_id }}
+          path: /tmp/pisicevir-build-logs/post-build-validation.log
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Install, test, and remove packages
         run: |
