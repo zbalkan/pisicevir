@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import xml.dom.minidom
-from typing import Optional
 
 from pisicevir.models.pisi import PisiDependency, PisiRecipe
 
@@ -34,7 +33,6 @@ class PspecRenderer:
         archive = self.doc.createElement("Archive")
         archive.setAttribute("type", self.recipe.source.archive.archive_type)
         archive.setAttribute("sha1sum", self.recipe.source.archive.sha1sum)
-        archive.setAttribute("sha256sum", self.recipe.source.archive.sha256sum)
         archive.appendChild(self.doc.createTextNode(self.recipe.source.archive.uri))
         source.appendChild(archive)
 
