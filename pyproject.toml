@@ -26,16 +26,16 @@ classifiers = [
     "Topic :: System :: Software Distribution",
 ]
 dependencies = [
-    "PyYAML>=6.0.2,<7",
-    "pydantic>=1.10.22,<2",
-    "zstandard>=0.23.0,<0.24",
+    "PyYAML>=6,<7",
+    "pydantic>=1.10,<2",
+    "zstandard>=0.20,<1",
 ]
 
 [project.optional-dependencies]
-gui = ["PyQt5>=5.15.11,<5.16"]
+gui = ["PyQt5>=5.15,<6"]
 test = [
-    "pytest>=8.3.5,<9",
-    "pytest-qt>=4.4.0,<5",
+    "pytest>=7.4,<9",
+    "pytest-qt>=4.2,<5",
 ]
 
 [project.urls]
