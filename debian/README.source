@@ -1,9 +1,0 @@
-Pisicevir Debian bootstrap package
-==================================
-
-This packaging exists to bootstrap and dogfood the Debian-to-PISI workflow.
-The resulting .deb is intended to be inspected and converted by Pisicevir on
-Devuan, then built and validated on PISI Linux.
-
-Before repository submission, replace the placeholder Maintainer and Homepage
-fields, confirm the project license, and require the full test suite to pass.
