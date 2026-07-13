@@ -153,7 +153,7 @@ jobs:
 
       - name: Upload build diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-debian-build-diagnostics-${{ github.run_id }}
           path: /tmp/pisicevir-build-logs/
@@ -207,7 +207,7 @@ jobs:
           )
 
       - name: Upload verified workflow artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: pisicevir-${{ steps.version.outputs.version }}-debian
           path: dist/debian/

@@ -181,7 +181,7 @@ jobs:
 
       - name: Upload build diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: debian-build-diagnostics-${{ github.run_id }}
           path: /tmp/pisicevir-build-logs/
@@ -216,7 +216,7 @@ jobs:
 
       - name: Upload post-build diagnostics
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: debian-post-build-diagnostics-${{ github.run_id }}
           path: /tmp/pisicevir-build-logs/post-build-validation.log
