@@ -23,6 +23,22 @@ _BOOT_PATHS = (
     "etc/initramfs-tools/",
     "usr/lib/grub/",
 )
+_UNSAFE_LIFECYCLE_TOKENS = (
+    "systemctl",
+    "invoke-rc.d",
+    "update-rc.d",
+    "service ",
+    "adduser",
+    "useradd",
+    "groupadd",
+    "ldconfig",
+    "depmod",
+    "update-initramfs",
+    "update-grub",
+    "debconf",
+    "ucf ",
+    "update-alternatives",
+)
 
 
 class Classifier:
@@ -45,16 +61,21 @@ class Classifier:
         warnings: List[str] = []
 
         if self.maintainer_scripts:
-            warnings.append(
-                "Package contains Debian maintainer scripts that require explicit lifecycle review"
-            )
-            return self._result(
-                conversion_class="E",
-                policy="native-review",
-                confidence="high",
-                reasons=["Foreign lifecycle scripts cannot be translated mechanically"],
-                warnings=warnings,
-            )
+            if self._python_bytecode_hooks_only():
+                warnings.append(
+                    "Debian Python bytecode hooks were detected; they must be omitted from the PISI lifecycle"
+                )
+            else:
+                warnings.append(
+                    "Package contains Debian maintainer scripts that require explicit lifecycle review"
+                )
+                return self._result(
+                    conversion_class="E",
+                    policy="native-review",
+                    confidence="high",
+                    reasons=["Foreign lifecycle scripts cannot be translated mechanically"],
+                    warnings=warnings,
+                )
 
         if any(path.startswith(_BOOT_PATHS) for path in paths):
             return self._result(
@@ -140,6 +161,31 @@ class Classifier:
             ["Payload contains no executable, service, kernel, or boot integration"],
             warnings,
         )
+
+    def _python_bytecode_hooks_only(self) -> bool:
+        saw_python_helper = False
+        for body in self.maintainer_scripts.values():
+            lowered = body.lower()
+            if any(token in lowered for token in _UNSAFE_LIFECYCLE_TOKENS):
+                return False
+            if "py3compile" in lowered or "py3clean" in lowered:
+                saw_python_helper = True
+                continue
+            executable_lines = [
+                line.strip()
+                for line in body.splitlines()
+                if line.strip() and not line.lstrip().startswith("#")
+            ]
+            harmless = {
+                "set -e",
+                "set -e;",
+                "exit 0",
+                "exit 0;",
+                ":",
+            }
+            if any(line not in harmless for line in executable_lines):
+                return False
+        return saw_python_helper
 
     def _result(
         self,
