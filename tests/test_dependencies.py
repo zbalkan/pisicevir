@@ -52,7 +52,9 @@ def test_generator_rejects_unresolved_dependency_groups() -> None:
             generator.generate()
 
 
-def test_generator_accepts_mapped_and_justifiably_ignored_dependencies() -> None:
+def test_generator_accepts_mapped_and_justifiably_ignored_dependencies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         package = os.path.join(tmpdir, "test.deb")
         create_dummy_deb(package, depends="python3 (>= 3.10), python3-yaml")
@@ -80,7 +82,7 @@ def test_generator_accepts_mapped_and_justifiably_ignored_dependencies() -> None
                 "reason": "Provided by the target image baseline for this fixture",
             }
         ]
-        os.environ["SOURCE_DATE_EPOCH"] = "1672531200"
+        monkeypatch.setenv("SOURCE_DATE_EPOCH", "1672531200")
         output = RecipeGenerator(
             package, inspection, plan, os.path.join(tmpdir, "recipe")
         ).generate()
