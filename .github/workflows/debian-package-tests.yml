@@ -98,8 +98,11 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               for key, value in values.items():
                   output.write(f"{key}={value}\n")
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as environment:
+              environment.write(
+                  f"SOURCE_DATE_EPOCH={values['source_date_epoch']}\n"
+              )
           PY
-          echo "SOURCE_DATE_EPOCH=${{ steps.metadata.outputs.source_date_epoch }}" >> "$GITHUB_ENV"
 
       - name: Run source tests
         run: |
