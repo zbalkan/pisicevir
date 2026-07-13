@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
 )
 
 from pisicevir.analysis.classifier import Classifier
+from pisicevir.analysis.planning import create_initial_plan
 from pisicevir.linter.linter import RecipeLinter
 from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.source_adapters.deb import DebAdapter
@@ -145,11 +146,13 @@ class PisicevirGUI(QMainWindow):
             metadata, result["payload"], result["maintainer_scripts"]
         ).classify()
 
+        dependency_count = sum(len(groups) for groups in result["dependencies"].values())
         self.info_label.setText(
             f"<b>Package:</b> {metadata['Package']}<br>"
             f"<b>Version:</b> {metadata['Version']}<br>"
             f"<b>Class:</b> {classification['conversion_class']}<br>"
-            f"<b>Policy:</b> {classification['policy_family']}"
+            f"<b>Policy:</b> {classification['policy_family']}<br>"
+            f"<b>Dependency groups:</b> {dependency_count}"
         )
         self.list_files.clear()
         for entry in result["payload"][:100]:
@@ -157,39 +160,12 @@ class PisicevirGUI(QMainWindow):
         if len(result["payload"]) > 100:
             self.list_files.addItem(f"... and {len(result['payload']) - 100} more entries")
 
-        plan = {
-            "source_type": "deb",
-            "source_sha256": result["sha256"],
-            "conversion_class": classification["conversion_class"],
-            "policy_family": classification["policy_family"],
-            "approved": False,
-            "homepage": "",
-            "licenses": [],
-            "packager": {"name": "", "email": ""},
-            "dependencies": {"map": {}},
-            "install": {
-                "preserve": [self._plan_entry(entry) for entry in result["payload"]],
-                "relocate": [],
-                "omit": [],
-            },
-            "analysis": classification,
-        }
+        plan = create_initial_plan(result, classification)
         self.plan_text.setPlainText(yaml.safe_dump(plan, sort_keys=False))
         self.btn_generate.setEnabled(True)
         self.status_bar.showMessage(
-            "Inspection complete. Review metadata and set approved: true before generation."
+            "Inspection complete. Map dependencies, review payload decisions, and set approved: true."
         )
-
-    @staticmethod
-    def _plan_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
-        item: Dict[str, Any] = {
-            "source": f"payload/{entry['path']}",
-            "target": f"/{entry['path']}",
-            "kind": entry["kind"],
-        }
-        if entry.get("link_target") is not None:
-            item["link_target"] = entry["link_target"]
-        return item
 
     def generate_recipe(self) -> None:
         if self.package_info is None or self.package_path is None:
