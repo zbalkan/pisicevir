@@ -149,15 +149,7 @@ def _plan(args: argparse.Namespace) -> int:
         classification["policy_family"] = args.policy
         classification["warnings"].append("Policy family was overridden by the user")
 
-    preserve = [
-        {
-            "source": f"payload/{entry['path']}",
-            "target": f"/{entry['path']}",
-            "kind": entry["kind"],
-        }
-        for entry in inspection["payload"]
-        if entry["kind"] != "directory"
-    ]
+    preserve = [_plan_entry(entry) for entry in inspection["payload"]]
     plan: Dict[str, Any] = {
         "source_type": "deb",
         "source_sha256": inspection["sha256"],
@@ -181,6 +173,17 @@ def _plan(args: argparse.Namespace) -> int:
     rendered = yaml.safe_dump(plan, sort_keys=False)
     _emit(rendered, args.output)
     return EXIT_OK
+
+
+def _plan_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+    item: Dict[str, Any] = {
+        "source": f"payload/{entry['path']}",
+        "target": f"/{entry['path']}",
+        "kind": entry["kind"],
+    }
+    if entry.get("link_target") is not None:
+        item["link_target"] = entry["link_target"]
+    return item
 
 
 def _generate(args: argparse.Namespace) -> int:
