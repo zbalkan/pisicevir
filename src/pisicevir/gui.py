@@ -168,15 +168,7 @@ class PisicevirGUI(QMainWindow):
             "packager": {"name": "", "email": ""},
             "dependencies": {"map": {}},
             "install": {
-                "preserve": [
-                    {
-                        "source": f"payload/{entry['path']}",
-                        "target": f"/{entry['path']}",
-                        "kind": entry["kind"],
-                    }
-                    for entry in result["payload"]
-                    if entry["kind"] != "directory"
-                ],
+                "preserve": [self._plan_entry(entry) for entry in result["payload"]],
                 "relocate": [],
                 "omit": [],
             },
@@ -187,6 +179,17 @@ class PisicevirGUI(QMainWindow):
         self.status_bar.showMessage(
             "Inspection complete. Review metadata and set approved: true before generation."
         )
+
+    @staticmethod
+    def _plan_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
+        item: Dict[str, Any] = {
+            "source": f"payload/{entry['path']}",
+            "target": f"/{entry['path']}",
+            "kind": entry["kind"],
+        }
+        if entry.get("link_target") is not None:
+            item["link_target"] = entry["link_target"]
+        return item
 
     def generate_recipe(self) -> None:
         if self.package_info is None or self.package_path is None:
