@@ -58,7 +58,6 @@ Description: graphical workbench for Pisicevir
 
 RULES = """#!/usr/bin/make -f
 
-export PYBUILD_NAME=pisicevir
 export PYBUILD_TEST_ARGS=-ra --ignore=tests/test_release_tools.py
 export QT_QPA_PLATFORM=offscreen
 export PYTHONHASHSEED=0
@@ -68,7 +67,6 @@ export PYTHONHASHSEED=0
 
 override_dh_auto_install:
 \tdh_auto_install --buildsystem=pybuild --destdir=$(CURDIR)/debian/tmp
-\tfind debian/tmp -mindepth 1 -printf '%P\\n' | sort
 """
 
 DESKTOP = """[Desktop Entry]
