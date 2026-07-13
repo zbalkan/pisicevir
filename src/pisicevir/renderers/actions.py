@@ -53,6 +53,18 @@ def _validate_link_target(member_path, raw_target):
             stack.append(part)
 
 
+def _read_exact(stream, size, member_name):
+    chunks = []
+    remaining = size
+    while remaining:
+        chunk = stream.read(min(1024 * 1024, remaining))
+        if not chunk:
+            raise RuntimeError("Truncated ar member: %s" % member_name)
+        chunks.append(chunk)
+        remaining -= len(chunk)
+    return b"".join(chunks)
+
+
 def _read_ar_data_member(package_path, destination_dir):
     members = {{}}
     with package_path.open("rb") as stream:
@@ -78,8 +90,9 @@ def _read_ar_data_member(package_path, destination_dir):
             if name in members:
                 raise RuntimeError("Duplicate ar member: %s" % name)
 
-            output_path = None
-            if name.startswith("data.tar"):
+            if name == "debian-binary":
+                members[name] = _read_exact(stream, size, name)
+            elif name.startswith("data.tar"):
                 output_path = destination_dir / name
                 with output_path.open("wb") as output:
                     remaining = size
@@ -89,16 +102,23 @@ def _read_ar_data_member(package_path, destination_dir):
                             raise RuntimeError("Truncated ar member: %s" % name)
                         output.write(chunk)
                         remaining -= len(chunk)
-            else:
+                members[name] = output_path
+            elif name.startswith("control.tar"):
                 stream.seek(size, os.SEEK_CUR)
-            members[name] = output_path
+                members[name] = None
+            else:
+                raise RuntimeError("Unexpected Debian archive member: %s" % name)
+
             if size % 2:
                 if stream.read(1) != b"\n":
                     raise RuntimeError("Invalid ar member padding")
 
-    if members.get("debian-binary") is not None:
-        raise RuntimeError("Internal error while reading debian-binary")
+    if members.get("debian-binary") != b"2.0\n":
+        raise RuntimeError("Unsupported or missing debian-binary member")
+    control_members = [name for name in members if name.startswith("control.tar")]
     data_members = [name for name in members if name.startswith("data.tar")]
+    if len(control_members) != 1:
+        raise RuntimeError("Expected exactly one control.tar member")
     if len(data_members) != 1:
         raise RuntimeError("Expected exactly one data.tar member")
     return members[data_members[0]]
@@ -114,7 +134,7 @@ def _open_payload_archive(path):
     return archive, None, None
 
 
-def _ensure_no_link_parent(root, relative_path, link_paths):
+def _ensure_no_link_parent(relative_path, link_paths):
     parts = PurePosixPath(relative_path).parts
     for index in range(1, len(parts)):
         parent = PurePosixPath(*parts[:index]).as_posix()
@@ -145,7 +165,7 @@ def _extract_selected(archive_path, payload_root):
             if relative_path not in _SELECTED:
                 continue
 
-            _ensure_no_link_parent(payload_root, relative_path, link_paths)
+            _ensure_no_link_parent(relative_path, link_paths)
             destination = payload_root / relative_path
             destination.parent.mkdir(parents=True, exist_ok=True)
 
