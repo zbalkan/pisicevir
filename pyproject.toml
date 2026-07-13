@@ -27,7 +27,7 @@ classifiers = [
 ]
 dependencies = [
     "PyYAML>=6,<7",
-    "pydantic>=1.10,<2",
+    "pydantic>=1.10,<3",
     "zstandard>=0.20,<1",
 ]
 
