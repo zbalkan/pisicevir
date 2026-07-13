@@ -37,6 +37,15 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Verify repository layout
+        run: |
+          test -f pyproject.toml
+          test -f README.md
+          test -d src/pisicevir
+          test -f src/pisicevir/__init__.py
+          test -d tests
+          find src/pisicevir -maxdepth 3 -type f -print | sort
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
