@@ -23,6 +23,7 @@ class DebAdapter:
     CONTROL_PREFIX = "control.tar"
     DATA_PREFIX = "data.tar"
     MAINTAINER_SCRIPTS = ("preinst", "postinst", "prerm", "postrm")
+    MAX_DECOMPRESSED_MEMBER_SIZE = 2 * 1024 * 1024 * 1024
 
     def __init__(self, path: str):
         self.path = Path(path)
@@ -194,11 +195,11 @@ class DebAdapter:
         payload.sort(key=lambda entry: entry.path)
         return payload
 
-    @staticmethod
-    def _open_tar(name: str, data: bytes) -> tarfile.TarFile:
+    def _open_tar(self, name: str, data: bytes) -> tarfile.TarFile:
         if name.endswith(".zst"):
             try:
-                data = zstandard.ZstdDecompressor().decompress(data)
+                with zstandard.ZstdDecompressor().stream_reader(io.BytesIO(data)) as reader:
+                    data = self._read_limited(reader, self.MAX_DECOMPRESSED_MEMBER_SIZE)
             except zstandard.ZstdError as exc:
                 raise DebFormatError(f"Unable to decompress {name}") from exc
             return tarfile.open(fileobj=io.BytesIO(data), mode="r:")
@@ -297,3 +298,17 @@ class DebAdapter:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
                 digest.update(chunk)
         return digest.hexdigest()
+
+    @staticmethod
+    def _read_limited(stream: BinaryIO, limit: int) -> bytes:
+        chunks: List[bytes] = []
+        total = 0
+        while True:
+            chunk = stream.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise DebFormatError("Compressed Debian member exceeds safety limit")
+            chunks.append(chunk)
+        return b"".join(chunks)
