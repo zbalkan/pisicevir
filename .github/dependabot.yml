@@ -19,6 +19,25 @@ updates:
       python-development:
         dependency-type: "development"
 
+  - package-ecosystem: "pip"
+    directory: "/requirements"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:15"
+      timezone: "Europe/Tallinn"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "python"
+      - "lock-file"
+    commit-message:
+      prefix: "deps"
+    groups:
+      locked-python-environment:
+        patterns:
+          - "*"
+
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
