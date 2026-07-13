@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -70,4 +71,14 @@ def test_reviewed_data_package_workflow() -> None:
         assert lint.returncode == 0, lint.stdout + lint.stderr
         assert (recipe_dir / "files/test.deb").is_file()
         assert (recipe_dir / "metadata/inspection.json").is_file()
-        assert "sha256sum=" in (recipe_dir / "pspec.xml").read_text(encoding="utf-8")
+
+        pspec = (recipe_dir / "pspec.xml").read_text(encoding="utf-8")
+        actions = (recipe_dir / "actions.py").read_text(encoding="utf-8")
+        provenance = json.loads(
+            (recipe_dir / "metadata/provenance.json").read_text(encoding="utf-8")
+        )
+        assert "sha1sum=" in pspec
+        assert "sha256sum=" not in pspec
+        assert "def setup():" in actions
+        assert "subprocess" not in actions
+        assert len(provenance["source_sha256"]) == 64
