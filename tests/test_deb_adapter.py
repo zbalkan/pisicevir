@@ -34,6 +34,7 @@ def create_dummy_deb(
     maintainer_script: bool = False,
     malicious_path: str | None = None,
     debian_binary: bytes = b"2.0\n",
+    depends: str | None = None,
 ) -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         root = Path(tmpdir)
@@ -41,12 +42,15 @@ def create_dummy_deb(
         data_path = root / "data.tar.gz"
 
         with tarfile.open(control_path, "w:gz") as archive:
-            control = (
-                b"Package: test-pkg\n"
-                b"Version: 1.0.0-1\n"
-                b"Architecture: all\n"
-                b"Description: A test package\n"
-            )
+            control_lines = [
+                "Package: test-pkg",
+                "Version: 1.0.0-1",
+                "Architecture: all",
+            ]
+            if depends:
+                control_lines.append(f"Depends: {depends}")
+            control_lines.append("Description: A test package")
+            control = ("\n".join(control_lines) + "\n").encode("utf-8")
             _add_bytes(archive, "./control", control)
             if maintainer_script:
                 _add_bytes(archive, "./postinst", b"#!/bin/sh\nset -e\n", 0o755)
@@ -88,13 +92,14 @@ def create_dummy_deb(
 def test_deb_adapter_returns_structured_payload() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         deb_path = os.path.join(tmpdir, "test.deb")
-        create_dummy_deb(deb_path, executable=True)
+        create_dummy_deb(deb_path, executable=True, depends="python3 (>= 3.10)")
         result = DebAdapter(deb_path).inspect()
 
     assert result["source_type"] == "deb"
     assert result["metadata"]["Package"] == "test-pkg"
     assert result["metadata"]["Architecture"] == "all"
     assert len(result["sha256"]) == 64
+    assert result["dependencies"]["Depends"][0]["raw"] == "python3 (>= 3.10)"
     entry = next(item for item in result["payload"] if item["path"] == "usr/bin/test-cmd")
     assert entry["kind"] == "file"
     assert entry["mode"] == 0o755
