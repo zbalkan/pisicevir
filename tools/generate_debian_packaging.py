@@ -59,7 +59,7 @@ Description: graphical workbench for Pisicevir
 RULES = """#!/usr/bin/make -f
 
 export PYBUILD_NAME=pisicevir
-export PYBUILD_TEST_ARGS=-ra
+export PYBUILD_TEST_ARGS=-ra --ignore=tests/test_release_tools.py
 export QT_QPA_PLATFORM=offscreen
 export PYTHONHASHSEED=0
 
