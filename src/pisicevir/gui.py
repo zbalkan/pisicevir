@@ -1,75 +1,91 @@
-import sys
-import os
-import yaml
-from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-                             QPushButton, QFileDialog, QTextEdit, QLabel, QListWidget, 
-                             QProgressBar, QStatusBar, QFrame, QSplitter, QTabWidget)
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
-from PyQt5.QtGui import QFont, QIcon, QPalette, QColor
+from __future__ import annotations
 
-from pisicevir.source_adapters.deb import DebAdapter
+import os
+import sys
+import traceback
+from typing import Any, Dict
+
+import yaml
+from PyQt5.QtCore import QThread, Qt, pyqtSignal
+from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtWidgets import (
+    QApplication,
+    QFileDialog,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QMainWindow,
+    QPushButton,
+    QSplitter,
+    QStatusBar,
+    QTabWidget,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
+
 from pisicevir.analysis.classifier import Classifier
-from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.linter.linter import RecipeLinter
+from pisicevir.renderers.generator import RecipeGenerator
+from pisicevir.source_adapters.deb import DebAdapter
+
 
 class Worker(QThread):
     finished = pyqtSignal(dict)
     error = pyqtSignal(str)
-    progress = pyqtSignal(str)
 
-    def __init__(self, action, **kwargs):
+    def __init__(self, action: str, **kwargs: Any):
         super().__init__()
         self.action = action
         self.kwargs = kwargs
 
-    def run(self):
+    def run(self) -> None:
         try:
             if self.action == "inspect":
-                adapter = DebAdapter(self.kwargs["path"])
-                result = adapter.inspect()
+                result = DebAdapter(self.kwargs["path"]).inspect()
                 self.finished.emit(result)
-            elif self.action == "generate":
+                return
+            if self.action == "generate":
                 generator = RecipeGenerator(
-                    self.kwargs["metadata"], 
-                    self.kwargs["payload"], 
-                    self.kwargs["plan"], 
-                    self.kwargs["output"]
+                    self.kwargs["source_path"],
+                    self.kwargs["inspection"],
+                    self.kwargs["plan"],
+                    self.kwargs["output"],
                 )
-                generator.generate()
-                self.finished.emit({"status": "success", "path": self.kwargs["output"]})
-        except Exception as e:
-            self.error.emit(str(e))
+                path = generator.generate()
+                self.finished.emit({"status": "success", "path": path})
+                return
+            raise ValueError(f"Unknown worker action: {self.action}")
+        except Exception:
+            self.error.emit(traceback.format_exc())
+
 
 class PisicevirGUI(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Pisicevir - PISI Recipe Generator")
         self.resize(1000, 700)
+        self.package_info: Dict[str, Any] | None = None
+        self.package_path: str | None = None
+        self.worker: Worker | None = None
         self.setup_ui()
-        self.package_info = None
-        self.plan = None
 
-    def setup_ui(self):
-        # Central widget and main layout
+    def setup_ui(self) -> None:
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
-        # Header
         header = QLabel("Pisicevir Desktop")
-        header.setFont(QFont("Arial", 18, QFont.Bold))
+        header.setFont(QFont("Sans Serif", 18, QFont.Bold))
         main_layout.addWidget(header)
 
-        # Splitter for main content
         splitter = QSplitter(Qt.Horizontal)
         main_layout.addWidget(splitter)
 
-        # Left panel: Actions and Package Info
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
-        
         self.btn_open = QPushButton("Open Package (.deb)")
         self.btn_open.setFixedHeight(40)
         self.btn_open.clicked.connect(self.open_package)
@@ -81,30 +97,22 @@ class PisicevirGUI(QMainWindow):
         left_layout.addWidget(self.info_label)
 
         self.list_files = QListWidget()
-        left_layout.addWidget(QLabel("Payload Files:"))
+        left_layout.addWidget(QLabel("Payload entries:"))
         left_layout.addWidget(self.list_files)
-
         splitter.addWidget(left_panel)
 
-        # Right panel: Tabs for Plan, Recipe, and Logs
         self.tabs = QTabWidget()
-        
-        # Tab 1: Transformation Plan
         self.plan_text = QTextEdit()
-        self.plan_text.setReadOnly(True)
+        self.plan_text.setReadOnly(False)
         self.tabs.addTab(self.plan_text, "Transformation Plan")
-        
-        # Tab 2: Linter Results
         self.linter_text = QTextEdit()
         self.linter_text.setReadOnly(True)
         self.tabs.addTab(self.linter_text, "Linter Report")
-        
         splitter.addWidget(self.tabs)
         splitter.setSizes([300, 700])
 
-        # Bottom Actions
         bottom_layout = QHBoxLayout()
-        self.btn_generate = QPushButton("Generate Recipe")
+        self.btn_generate = QPushButton("Generate Reviewed Recipe")
         self.btn_generate.setEnabled(False)
         self.btn_generate.setFixedHeight(40)
         self.btn_generate.clicked.connect(self.generate_recipe)
@@ -112,92 +120,127 @@ class PisicevirGUI(QMainWindow):
         bottom_layout.addWidget(self.btn_generate)
         main_layout.addLayout(bottom_layout)
 
-        # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
         self.status_bar.showMessage("Ready")
 
-    def open_package(self):
-        file_path, _ = QFileDialog.getOpenFileName(self, "Open Debian Package", "", "Debian Packages (*.deb)")
-        if file_path:
-            self.status_bar.showMessage(f"Inspecting {os.path.basename(file_path)}...")
-            self.worker = Worker("inspect", path=file_path)
-            self.worker.finished.connect(self.on_inspect_finished)
-            self.worker.error.connect(self.on_error)
-            self.worker.start()
+    def open_package(self) -> None:
+        file_path, _ = QFileDialog.getOpenFileName(
+            self, "Open Debian Package", "", "Debian Packages (*.deb)"
+        )
+        if not file_path:
+            return
+        self.package_path = file_path
+        self.btn_generate.setEnabled(False)
+        self.status_bar.showMessage(f"Inspecting {os.path.basename(file_path)}...")
+        self.worker = Worker("inspect", path=file_path)
+        self.worker.finished.connect(self.on_inspect_finished)
+        self.worker.error.connect(self.on_error)
+        self.worker.start()
 
-    def on_inspect_finished(self, result):
+    def on_inspect_finished(self, result: Dict[str, Any]) -> None:
         self.package_info = result
         metadata = result["metadata"]
-        pkg_name = metadata.get("Package", "Unknown")
-        version = metadata.get("Version", "Unknown")
-        
-        self.info_label.setText(f"<b>Package:</b> {pkg_name}<br><b>Version:</b> {version}")
-        self.status_bar.showMessage("Inspection complete")
-        
-        self.list_files.clear()
-        for f in result["payload"][:100]: # Limit to first 100 for performance
-            self.list_files.addItem(f)
-        if len(result["payload"]) > 100:
-            self.list_files.addItem(f"... and {len(result['payload']) - 100} more files")
+        classification = Classifier(
+            metadata, result["payload"], result["maintainer_scripts"]
+        ).classify()
 
-        # Automatically classify and create a plan
-        classifier = Classifier(metadata, result["payload"])
-        classification = classifier.classify()
-        
-        self.plan = {
+        self.info_label.setText(
+            f"<b>Package:</b> {metadata['Package']}<br>"
+            f"<b>Version:</b> {metadata['Version']}<br>"
+            f"<b>Class:</b> {classification['conversion_class']}<br>"
+            f"<b>Policy:</b> {classification['policy_family']}"
+        )
+        self.list_files.clear()
+        for entry in result["payload"][:100]:
+            self.list_files.addItem(f"{entry['kind']}: {entry['path']}")
+        if len(result["payload"]) > 100:
+            self.list_files.addItem(f"... and {len(result['payload']) - 100} more entries")
+
+        plan = {
             "source_type": "deb",
+            "source_sha256": result["sha256"],
             "conversion_class": classification["conversion_class"],
             "policy_family": classification["policy_family"],
+            "approved": False,
+            "homepage": "",
+            "licenses": [],
+            "packager": {"name": "", "email": ""},
+            "dependencies": {"map": {}},
             "install": {
-                "preserve": [{"source": "usr/share/*", "target": "/usr/share/"}]
-            }
+                "preserve": [
+                    {
+                        "source": f"payload/{entry['path']}",
+                        "target": f"/{entry['path']}",
+                        "kind": entry["kind"],
+                    }
+                    for entry in result["payload"]
+                    if entry["kind"] != "directory"
+                ],
+                "relocate": [],
+                "omit": [],
+            },
+            "analysis": classification,
         }
-        self.plan_text.setText(yaml.dump(self.plan, default_flow_style=False))
+        self.plan_text.setPlainText(yaml.safe_dump(plan, sort_keys=False))
         self.btn_generate.setEnabled(True)
+        self.status_bar.showMessage(
+            "Inspection complete. Review metadata and set approved: true before generation."
+        )
 
-    def generate_recipe(self):
+    def generate_recipe(self) -> None:
+        if self.package_info is None or self.package_path is None:
+            return
+        try:
+            plan = yaml.safe_load(self.plan_text.toPlainText())
+            if not isinstance(plan, dict):
+                raise ValueError("Transformation plan must be a YAML mapping")
+        except Exception as exc:
+            self.on_error(f"Invalid transformation plan:\n{exc}")
+            return
+
         output_dir = QFileDialog.getExistingDirectory(self, "Select Output Directory")
-        if output_dir:
-            pkg_name = self.package_info["metadata"].get("Package", "generated-recipe")
-            full_output = os.path.join(output_dir, pkg_name)
-            
-            self.status_bar.showMessage("Generating recipe...")
-            self.worker = Worker("generate", 
-                                metadata=self.package_info["metadata"], 
-                                payload=self.package_info["payload"],
-                                plan=self.plan,
-                                output=full_output)
-            self.worker.finished.connect(self.on_generate_finished)
-            self.worker.error.connect(self.on_error)
-            self.worker.start()
+        if not output_dir:
+            return
+        package_name = self.package_info["metadata"].get("Package", "generated-recipe")
+        full_output = os.path.join(output_dir, package_name)
+        self.status_bar.showMessage("Generating reviewed recipe...")
+        self.worker = Worker(
+            "generate",
+            source_path=self.package_path,
+            inspection=self.package_info,
+            plan=plan,
+            output=full_output,
+        )
+        self.worker.finished.connect(self.on_generate_finished)
+        self.worker.error.connect(self.on_error)
+        self.worker.start()
 
-    def on_generate_finished(self, result):
+    def on_generate_finished(self, result: Dict[str, Any]) -> None:
         path = result["path"]
-        self.status_bar.showMessage(f"Recipe generated at {path}")
-        
-        # Run linter
-        linter = RecipeLinter(path)
-        findings = linter.lint()
-        
+        findings = RecipeLinter(path).lint()
         if not findings:
-            self.linter_text.setText("No issues found. The recipe is valid.")
+            self.linter_text.setPlainText(
+                "No implemented lint checks reported an issue. Build validation is still required."
+            )
         else:
-            report = ""
-            for f in findings:
-                report += f"[{f['severity']}] {f['code']}: {f['message']}\n"
-            self.linter_text.setText(report)
-        
-        self.tabs.setCurrentIndex(1) # Switch to linter tab
+            self.linter_text.setPlainText(
+                "\n".join(
+                    f"[{finding['severity']}] {finding['code']}: {finding['message']}"
+                    for finding in findings
+                )
+            )
+        self.tabs.setCurrentIndex(1)
+        self.status_bar.showMessage(f"Recipe generated at {path}")
 
-    def on_error(self, message):
-        self.status_bar.showMessage(f"Error: {message}")
-        self.linter_text.setText(f"An error occurred:\n{message}")
+    def on_error(self, message: str) -> None:
+        self.status_bar.showMessage("Operation failed")
+        self.linter_text.setPlainText(message)
+        self.tabs.setCurrentIndex(1)
 
-def main():
+
+def main() -> int:
     app = QApplication(sys.argv)
-    
-    # Simple KDE-like styling (Breeze theme colors)
     palette = QPalette()
     palette.setColor(QPalette.Window, QColor(239, 240, 241))
     palette.setColor(QPalette.WindowText, QColor(49, 54, 59))
@@ -213,10 +256,11 @@ def main():
     palette.setColor(QPalette.Highlight, QColor(61, 174, 233))
     palette.setColor(QPalette.HighlightedText, Qt.white)
     app.setPalette(palette)
-    
+
     window = PisicevirGUI()
     window.show()
-    sys.exit(app.exec_())
+    return app.exec_()
+
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())
