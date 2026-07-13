@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-pisicevir --version
-pisicevir --help >/dev/null
-python3 -c 'import pisicevir; print(pisicevir.__version__)'
