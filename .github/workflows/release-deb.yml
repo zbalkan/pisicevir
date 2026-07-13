@@ -44,9 +44,7 @@ jobs:
           python <<'PY'
           import ast
           import os
-          import re
           import subprocess
-          import tomllib
           from pathlib import Path
 
           import semver
@@ -64,32 +62,10 @@ jobs:
           if not isinstance(source_version, str):
               raise SystemExit("Unable to read __version__ from src/pisicevir/__init__.py")
 
-          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
-          project_version = project["project"]["version"]
-
-          changelog_line = Path("debian/changelog").read_text(encoding="utf-8").splitlines()[0]
-          match = re.fullmatch(r"pisicevir \(([^)]+)\) .+", changelog_line)
-          if not match:
-              raise SystemExit("Unable to parse the first line of debian/changelog")
-
-          debian_version = match.group(1)
-          debian_upstream_version = debian_version.split("-", 1)[0]
-
           try:
               current = semver.Version.parse(source_version)
           except ValueError as exc:
               raise SystemExit(f"Source version is not valid SemVer: {source_version}: {exc}") from exc
-
-          if project_version != source_version:
-              raise SystemExit(
-                  f"Version mismatch: pyproject.toml={project_version}, "
-                  f"src/pisicevir/__init__.py={source_version}"
-              )
-
-          if debian_upstream_version != source_version:
-              raise SystemExit(
-                  f"Version mismatch: debian/changelog={debian_version}, source={source_version}"
-              )
 
           subprocess.run(["git", "fetch", "--tags", "--force"], check=True)
           raw_tags = subprocess.run(
@@ -102,9 +78,19 @@ jobs:
           versions = []
           for tag in raw_tags:
               try:
-                  versions.append((semver.Version.parse(tag[1:]), tag))
+                  parsed = semver.Version.parse(tag[1:])
               except ValueError:
                   print(f"Ignoring non-SemVer tag: {tag}")
+                  continue
+
+              reachable = subprocess.run(
+                  ["git", "merge-base", "--is-ancestor", tag, "HEAD"],
+                  check=False,
+              ).returncode == 0
+              if reachable:
+                  versions.append((parsed, tag))
+              else:
+                  print(f"Ignoring SemVer tag not reachable from HEAD: {tag}")
 
           latest_version = None
           latest_tag = None
@@ -129,13 +115,146 @@ jobs:
           with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
               output.write(f"version={current}\n")
               output.write(f"tag={tag}\n")
-              output.write(f"debian_version={debian_version}\n")
+              output.write(f"debian_version={current}-1\n")
               output.write(f"latest_tag={latest_tag or ''}\n")
 
           if latest_tag:
               print(f"Release accepted: {latest_tag} -> {tag}")
           else:
               print(f"Release accepted: no previous SemVer tag -> {tag}")
+          PY
+
+      - name: Generate release notes and Debian changelog
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          TAG: ${{ steps.version.outputs.tag }}
+          LATEST_TAG: ${{ steps.version.outputs.latest_tag }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          python <<'PY'
+          import os
+          import subprocess
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          import semver
+
+          version = os.environ["VERSION"]
+          tag = os.environ["TAG"]
+          latest_tag = os.environ.get("LATEST_TAG", "")
+          repository = os.environ["REPOSITORY"]
+
+          def git(*args: str) -> str:
+              return subprocess.run(
+                  ["git", *args],
+                  check=True,
+                  text=True,
+                  capture_output=True,
+              ).stdout.strip()
+
+          def commits_between(previous: str | None, current: str) -> list[tuple[str, str]]:
+              revision = f"{previous}..{current}" if previous else current
+              output = git(
+                  "log",
+                  revision,
+                  "--no-merges",
+                  "--reverse",
+                  "--format=%H%x1f%s",
+              )
+              commits = []
+              for line in output.splitlines():
+                  if not line.strip():
+                      continue
+                  sha, subject = line.split("\x1f", 1)
+                  commits.append((sha, subject.strip()))
+              return commits
+
+          current_commits = commits_between(latest_tag or None, "HEAD")
+          if not current_commits:
+              raise SystemExit("Release refused: there are no commits since the previous tag")
+
+          dist = Path("dist")
+          dist.mkdir(exist_ok=True)
+          notes_path = dist / "RELEASE-NOTES.md"
+
+          notes = [f"# Pisicevir {version}", ""]
+          if latest_tag:
+              notes.extend(
+                  [
+                      f"Changes since `{latest_tag}`:",
+                      "",
+                  ]
+              )
+          else:
+              notes.extend(["Initial release changes:", ""])
+
+          for sha, subject in current_commits:
+              notes.append(
+                  f"- {subject} ([`{sha[:7]}`](https://github.com/{repository}/commit/{sha}))"
+              )
+
+          if latest_tag:
+              notes.extend(
+                  [
+                      "",
+                      f"**Full comparison:** `{latest_tag}...{tag}`",
+                  ]
+              )
+
+          notes_path.write_text("\n".join(notes) + "\n", encoding="utf-8")
+
+          raw_tags = git("tag", "--list", "v*").splitlines()
+          releases: list[tuple[semver.Version, str, str]] = []
+          for existing_tag in raw_tags:
+              try:
+                  parsed = semver.Version.parse(existing_tag[1:])
+              except ValueError:
+                  continue
+              if subprocess.run(
+                  ["git", "merge-base", "--is-ancestor", existing_tag, "HEAD"],
+                  check=False,
+              ).returncode == 0:
+                  releases.append((parsed, existing_tag, existing_tag))
+
+          releases.sort(key=lambda item: item[0])
+          releases.append((semver.Version.parse(version), tag, "HEAD"))
+
+          changelog_entries = []
+          previous_ref = None
+          for release_version, release_tag, release_ref in releases:
+              release_commits = commits_between(previous_ref, release_ref)
+              if not release_commits:
+                  previous_ref = release_ref
+                  continue
+
+              if release_ref == "HEAD":
+                  date = datetime.now(timezone.utc).strftime("%a, %d %b %Y %H:%M:%S +0000")
+              else:
+                  date = git("show", "-s", "--format=%aD", f"{release_ref}^{{}}")
+
+              entry = [
+                  f"pisicevir ({release_version}-1) unstable; urgency=medium",
+                  "",
+              ]
+              for _, subject in release_commits:
+                  entry.append(f"  * {subject}")
+              entry.extend(
+                  [
+                      "",
+                      f" -- Caracal Project <maintainers@example.invalid>  {date}",
+                      "",
+                  ]
+              )
+              changelog_entries.append("\n".join(entry))
+              previous_ref = release_ref
+
+          Path("debian/changelog").write_text(
+              "\n".join(reversed(changelog_entries)).rstrip() + "\n",
+              encoding="utf-8",
+          )
+
+          print(notes_path.read_text(encoding="utf-8"))
+          print(Path("debian/changelog").read_text(encoding="utf-8"))
           PY
 
       - name: Install project and run tests
@@ -188,6 +307,9 @@ jobs:
             -o -name 'pisicevir_*.buildinfo' \) \
             -exec cp -v {} dist/debian/ \;
 
+          cp debian/changelog dist/debian/debian-changelog
+          cp dist/RELEASE-NOTES.md dist/debian/RELEASE-NOTES.md
+
           test -n "$(find dist/debian -maxdepth 1 -name 'pisicevir_*.deb' -print -quit)"
           test -n "$(find dist/debian -maxdepth 1 -name 'pisicevir-gui_*.deb' -print -quit)"
 
@@ -214,7 +336,7 @@ jobs:
           gh release create "$TAG" dist/debian/* \
             --verify-tag \
             --title "Pisicevir $VERSION" \
-            --generate-notes
+            --notes-file dist/RELEASE-NOTES.md
 
       - name: Remove tag when release fails
         if: failure() && steps.tag.outputs.created == 'true'
