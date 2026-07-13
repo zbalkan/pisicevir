@@ -14,7 +14,6 @@ class PisiArchive(BaseModel):
     uri: str
     archive_type: str = "binary"
     sha1sum: str
-    sha256sum: str
 
 
 class PisiDependency(BaseModel):
