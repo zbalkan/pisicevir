@@ -6,7 +6,7 @@ import os
 import shutil
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from typing import Any, Dict, Iterable, List
+from typing import Any, Dict, List
 
 import yaml
 
@@ -68,6 +68,7 @@ class RecipeGenerator:
         )
         provenance = {
             "source_file": self.source_path.name,
+            "source_sha1": self._hash_file(self.source_path, "sha1"),
             "source_sha256": self.inspection["sha256"],
             "policy_family": self.plan["policy_family"],
             "conversion_class": self.plan["conversion_class"],
@@ -81,8 +82,6 @@ class RecipeGenerator:
     def _validate_inputs(self) -> None:
         if not self.source_path.is_file():
             raise FileNotFoundError(f"Source package not found: {self.source_path}")
-        if not self.output_dir:
-            raise ValueError("Output directory is required")
         if self.plan.get("approved") is not True:
             raise ValueError(
                 "Transformation plan must be reviewed and set approved: true before generation"
@@ -101,17 +100,62 @@ class RecipeGenerator:
         if not licenses or any(value in {"UNKNOWN", "NOASSERTION"} for value in licenses):
             raise ValueError("Plan must define reviewed package licensing")
 
-        operations = self.plan.get("install", {}).get("preserve", []) + self.plan.get(
-            "install", {}
-        ).get("relocate", [])
-        if not operations:
-            raise ValueError("Transformation plan contains no install operations")
+        payload = {entry["path"]: entry for entry in self.inspection["payload"]}
+        install = self.plan.get("install", {})
+        operations = [
+            *install.get("preserve", []),
+            *install.get("relocate", []),
+        ]
+        omitted = install.get("omit", [])
+        if not operations and not omitted:
+            raise ValueError("Transformation plan contains no payload decisions")
+
+        decided_sources: set[str] = set()
+        targets: set[str] = set()
         for operation in operations:
-            if not isinstance(operation.get("source"), str):
-                raise ValueError("Every install operation requires a source")
+            source = operation.get("source")
             target = operation.get("target")
+            if not isinstance(source, str) or not source.startswith("payload/"):
+                raise ValueError("Every install operation source must start with payload/")
+            relative_source = source.removeprefix("payload/")
+            entry = payload.get(relative_source)
+            if entry is None:
+                raise ValueError(f"Install source is not present in the package: {source}")
+            if source in decided_sources:
+                raise ValueError(f"Payload source has multiple decisions: {source}")
             if not isinstance(target, str) or not target.startswith("/"):
                 raise ValueError("Every install operation requires an absolute target")
+            if target in targets:
+                raise ValueError(f"Multiple payload entries target the same path: {target}")
+            if operation.get("kind") != entry["kind"]:
+                raise ValueError(f"Payload kind was changed for {source}")
+            if entry.get("link_target") != operation.get("link_target"):
+                raise ValueError(f"Payload link target was changed for {source}")
+            decided_sources.add(source)
+            targets.add(target)
+
+        for raw_omission in omitted:
+            source = (
+                raw_omission.get("source")
+                if isinstance(raw_omission, dict)
+                else raw_omission
+            )
+            if not isinstance(source, str) or not source.startswith("payload/"):
+                raise ValueError("Every omission must identify a payload/ source")
+            relative_source = source.removeprefix("payload/")
+            if relative_source not in payload:
+                raise ValueError(f"Omitted source is not present in the package: {source}")
+            if source in decided_sources:
+                raise ValueError(f"Payload source has multiple decisions: {source}")
+            decided_sources.add(source)
+
+        expected_sources = {f"payload/{path}" for path in payload}
+        undecided = sorted(expected_sources - decided_sources)
+        if undecided:
+            raise ValueError(
+                "Transformation plan does not cover every payload entry: "
+                + ", ".join(undecided[:10])
+            )
 
     def _create_recipe_model(self, copied_source: Path) -> PisiRecipe:
         metadata = self.inspection["metadata"]
@@ -145,9 +189,8 @@ class RecipeGenerator:
                 uri=f"files/{copied_source.name}",
                 archive_type="binary",
                 sha1sum=source_sha1,
-                sha256sum=self.inspection["sha256"],
             ),
-            build_dependencies=[PisiDependency(name="binutils")],
+            build_dependencies=[PisiDependency(name="python3-zstandard")],
         )
         package = PisiPackage(
             name=package_name,
