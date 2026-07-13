@@ -1,0 +1,42 @@
+Source: pisicevir
+Section: devel
+Priority: optional
+Maintainer: Caracal Project <maintainers@example.invalid>
+Build-Depends:
+ debhelper-compat (= 13),
+ dh-sequence-python3,
+ pybuild-plugin-pyproject,
+ python3-all,
+ python3-setuptools,
+ python3-pytest,
+ python3-yaml,
+ python3-pydantic,
+ python3-pyqt5,
+ binutils
+Rules-Requires-Root: no
+Standards-Version: 4.6.2
+Homepage: https://example.invalid/pisicevir
+
+Package: pisicevir
+Architecture: all
+Depends:
+ ${misc:Depends},
+ ${python3:Depends},
+ binutils,
+ python3-yaml,
+ python3-pydantic
+Description: external package importer and PISI recipe generator
+ Pisicevir inspects external package artifacts, classifies conversion risk,
+ and generates native PISI packaging projects. Debian package inspection is
+ the first supported source adapter.
+
+Package: pisicevir-gui
+Section: devel
+Architecture: all
+Depends:
+ ${misc:Depends},
+ pisicevir (= ${binary:Version}),
+ python3-pyqt5
+Description: graphical workbench for Pisicevir
+ This package provides the Qt graphical interface for inspecting Debian
+ packages and reviewing generated PISI recipe data.

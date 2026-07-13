@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pisicevir"
+version = "0.1.0"
+description = "Policy-driven external package importer and native PISI recipe generator"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "PyYAML>=6",
+    "pydantic>=1.10",
+]
+
+[project.optional-dependencies]
+gui = ["PyQt5>=5.15"]
+test = [
+    "pytest>=7.4",
+    "pytest-qt>=4.4",
+]
+
+[project.scripts]
+pisicevir = "pisicevir.cli:main"
+pisicevir-gui = "pisicevir.gui:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
