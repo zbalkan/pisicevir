@@ -1,9 +1,0 @@
-[Desktop Entry]
-Type=Application
-Name=Pisicevir
-Comment=Inspect external packages and generate PISI recipes
-Exec=pisicevir-gui
-Icon=system-software-install
-Terminal=false
-Categories=Development;Utility;
-Keywords=PISI;package;converter;Debian;
