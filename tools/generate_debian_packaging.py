@@ -58,7 +58,7 @@ Description: graphical workbench for Pisicevir
 
 RULES = """#!/usr/bin/make -f
 
-export PYBUILD_TEST_ARGS=-ra --ignore=tests/test_release_tools.py
+export PYBUILD_TEST_ARGS=-ra -p no:cacheprovider --ignore=tests/test_release_tools.py
 export QT_QPA_PLATFORM=offscreen
 export PYTHONHASHSEED=0
 
