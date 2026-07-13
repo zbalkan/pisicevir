@@ -4,12 +4,13 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Any, Dict, Optional, Sequence
+from typing import Optional, Sequence
 
 import yaml
 
 from pisicevir import __version__
 from pisicevir.analysis.classifier import Classifier
+from pisicevir.analysis.planning import create_initial_plan
 from pisicevir.linter.linter import RecipeLinter
 from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.source_adapters.deb import DebAdapter, DebFormatError
@@ -109,12 +110,14 @@ def _inspect(args: argparse.Namespace) -> int:
         rendered = json.dumps(result, indent=2, sort_keys=True) + "\n"
     else:
         metadata = result["metadata"]
+        dependency_count = sum(len(groups) for groups in result["dependencies"].values())
         rendered = (
             f"Package: {metadata['Package']}\n"
             f"Version: {metadata['Version']}\n"
             f"Architecture: {metadata['Architecture']}\n"
             f"SHA-256: {result['sha256']}\n"
             f"Payload entries: {len(result['payload'])}\n"
+            f"Dependency groups: {dependency_count}\n"
             f"Maintainer scripts: {', '.join(sorted(result['maintainer_scripts'])) or 'none'}\n"
         )
     _emit(rendered, args.output)
@@ -149,41 +152,17 @@ def _plan(args: argparse.Namespace) -> int:
         classification["policy_family"] = args.policy
         classification["warnings"].append("Policy family was overridden by the user")
 
-    preserve = [_plan_entry(entry) for entry in inspection["payload"]]
-    plan: Dict[str, Any] = {
-        "source_type": "deb",
-        "source_sha256": inspection["sha256"],
-        "conversion_class": classification["conversion_class"],
-        "policy_family": classification["policy_family"],
-        "approved": False,
-        "homepage": args.homepage,
-        "licenses": args.licenses or [],
-        "packager": {
-            "name": args.packager_name,
-            "email": args.packager_email,
-        },
-        "dependencies": {"map": {}},
-        "install": {"preserve": preserve, "relocate": [], "omit": []},
-        "analysis": {
-            "confidence": classification["confidence"],
-            "reasons": classification["reasons"],
-            "warnings": classification["warnings"],
-        },
-    }
+    plan = create_initial_plan(
+        inspection,
+        classification,
+        homepage=args.homepage,
+        licenses=args.licenses,
+        packager_name=args.packager_name,
+        packager_email=args.packager_email,
+    )
     rendered = yaml.safe_dump(plan, sort_keys=False)
     _emit(rendered, args.output)
     return EXIT_OK
-
-
-def _plan_entry(entry: Dict[str, Any]) -> Dict[str, Any]:
-    item: Dict[str, Any] = {
-        "source": f"payload/{entry['path']}",
-        "target": f"/{entry['path']}",
-        "kind": entry["kind"],
-    }
-    if entry.get("link_target") is not None:
-        item["link_target"] = entry["link_target"]
-    return item
 
 
 def _generate(args: argparse.Namespace) -> int:
