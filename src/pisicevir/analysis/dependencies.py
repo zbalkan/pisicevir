@@ -86,9 +86,9 @@ def _split_top_level(value: str, delimiter: str) -> Iterable[str]:
             brackets += 1
         elif character == "]":
             brackets -= 1
-        elif character == "<":
+        elif character == "<" and parentheses == 0 and brackets == 0:
             angles += 1
-        elif character == ">":
+        elif character == ">" and parentheses == 0 and brackets == 0:
             angles -= 1
         elif (
             character == delimiter
