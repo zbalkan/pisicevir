@@ -63,6 +63,8 @@ jobs:
             lintian \
             pybuild-plugin-pyproject \
             python3-all \
+            python3-build \
+            python3-wheel \
             python3-pydantic \
             python3-pyqt5 \
             python3-pytest \
@@ -168,7 +170,7 @@ jobs:
             log="/tmp/pisicevir-build-logs/build-$build.log"
             if ! (
               cd "/tmp/pisicevir-build-$build/pisicevir-$VERSION"
-              dpkg-buildpackage -us -uc -b
+              PATH=/usr/sbin:/usr/bin:/sbin:/bin dpkg-buildpackage -us -uc -b
             ) >"$log" 2>&1; then
               echo "Debian build $build failed. Last 200 log lines:"
               tail -n 200 "$log"
