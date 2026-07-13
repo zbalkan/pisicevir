@@ -1,0 +1,224 @@
+name: Release Debian packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-deb
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Tag and build Debian packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      PYTHONUNBUFFERED: "1"
+      QT_QPA_PLATFORM: offscreen
+
+    steps:
+      - name: Check out repository and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install release tooling
+        run: python -m pip install --upgrade semver
+
+      - name: Validate release version
+        id: version
+        shell: bash
+        run: |
+          python <<'PY'
+          import ast
+          import os
+          import re
+          import subprocess
+          import tomllib
+          from pathlib import Path
+
+          import semver
+
+          init_file = Path("src/pisicevir/__init__.py")
+          module = ast.parse(init_file.read_text(encoding="utf-8"), filename=str(init_file))
+          source_version = None
+          for node in module.body:
+              if not isinstance(node, ast.Assign):
+                  continue
+              if any(isinstance(target, ast.Name) and target.id == "__version__" for target in node.targets):
+                  source_version = ast.literal_eval(node.value)
+                  break
+
+          if not isinstance(source_version, str):
+              raise SystemExit("Unable to read __version__ from src/pisicevir/__init__.py")
+
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          project_version = project["project"]["version"]
+
+          changelog_line = Path("debian/changelog").read_text(encoding="utf-8").splitlines()[0]
+          match = re.fullmatch(r"pisicevir \(([^)]+)\) .+", changelog_line)
+          if not match:
+              raise SystemExit("Unable to parse the first line of debian/changelog")
+
+          debian_version = match.group(1)
+          debian_upstream_version = debian_version.split("-", 1)[0]
+
+          try:
+              current = semver.Version.parse(source_version)
+          except ValueError as exc:
+              raise SystemExit(f"Source version is not valid SemVer: {source_version}: {exc}") from exc
+
+          if project_version != source_version:
+              raise SystemExit(
+                  f"Version mismatch: pyproject.toml={project_version}, "
+                  f"src/pisicevir/__init__.py={source_version}"
+              )
+
+          if debian_upstream_version != source_version:
+              raise SystemExit(
+                  f"Version mismatch: debian/changelog={debian_version}, source={source_version}"
+              )
+
+          subprocess.run(["git", "fetch", "--tags", "--force"], check=True)
+          raw_tags = subprocess.run(
+              ["git", "tag", "--list", "v*"],
+              check=True,
+              text=True,
+              capture_output=True,
+          ).stdout.splitlines()
+
+          versions = []
+          for tag in raw_tags:
+              try:
+                  versions.append((semver.Version.parse(tag[1:]), tag))
+              except ValueError:
+                  print(f"Ignoring non-SemVer tag: {tag}")
+
+          latest_version = None
+          latest_tag = None
+          if versions:
+              latest_version, latest_tag = max(versions, key=lambda item: item[0])
+              if current == latest_version:
+                  raise SystemExit(
+                      f"Release refused: source version {current} is already published as {latest_tag}"
+                  )
+              if current < latest_version:
+                  raise SystemExit(
+                      f"Release refused: source version {current} is lower than latest tag {latest_tag}"
+                  )
+
+          tag = f"v{current}"
+          if subprocess.run(
+              ["git", "rev-parse", "--verify", "--quiet", f"refs/tags/{tag}"],
+              check=False,
+          ).returncode == 0:
+              raise SystemExit(f"Release refused: tag {tag} already exists")
+
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              output.write(f"version={current}\n")
+              output.write(f"tag={tag}\n")
+              output.write(f"debian_version={debian_version}\n")
+              output.write(f"latest_tag={latest_tag or ''}\n")
+
+          if latest_tag:
+              print(f"Release accepted: {latest_tag} -> {tag}")
+          else:
+              print(f"Release accepted: no previous SemVer tag -> {tag}")
+          PY
+
+      - name: Install project and run tests
+        run: |
+          python -m pip install --upgrade pip setuptools wheel
+          python -m pip install --editable ".[gui,test]"
+          python -m compileall -q src tests
+          python -m pytest -ra
+
+      - name: Create and push version tag
+        id: tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$TAG" --message "Pisicevir $VERSION"
+          git push origin "$TAG"
+          echo "created=true" >> "$GITHUB_OUTPUT"
+
+      - name: Install Debian build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            devscripts \
+            debhelper \
+            dh-python \
+            pybuild-plugin-pyproject \
+            python3-all \
+            python3-setuptools \
+            python3-pytest \
+            python3-yaml \
+            python3-pydantic \
+            python3-pyqt5 \
+            binutils \
+            lintian
+
+      - name: Build Debian binary packages
+        run: dpkg-buildpackage -us -uc -b
+
+      - name: Collect release artifacts
+        run: |
+          mkdir -p dist/debian
+          find .. -maxdepth 1 -type f \
+            \( -name 'pisicevir_*.deb' \
+            -o -name 'pisicevir-gui_*.deb' \
+            -o -name 'pisicevir_*.changes' \
+            -o -name 'pisicevir_*.buildinfo' \) \
+            -exec cp -v {} dist/debian/ \;
+
+          test -n "$(find dist/debian -maxdepth 1 -name 'pisicevir_*.deb' -print -quit)"
+          test -n "$(find dist/debian -maxdepth 1 -name 'pisicevir-gui_*.deb' -print -quit)"
+
+          lintian dist/debian/*.changes || true
+          (
+            cd dist/debian
+            sha256sum * > SHA256SUMS
+          )
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pisicevir-${{ steps.version.outputs.version }}-debian
+          path: dist/debian/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$TAG" dist/debian/* \
+            --verify-tag \
+            --title "Pisicevir $VERSION" \
+            --generate-notes
+
+      - name: Remove tag when release fails
+        if: failure() && steps.tag.outputs.created == 'true'
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          git push --delete origin "$TAG" || true
