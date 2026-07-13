@@ -68,6 +68,7 @@ export PYTHONHASHSEED=0
 
 override_dh_auto_install:
 \tdh_auto_install --buildsystem=pybuild --destdir=$(CURDIR)/debian/tmp
+\tfind debian/tmp -mindepth 1 -printf '%P\n' | sort
 """
 
 DESKTOP = """[Desktop Entry]
