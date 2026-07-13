@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools==80.9.0"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,17 +8,40 @@ dynamic = ["version"]
 description = "Policy-driven external package importer and native PISI recipe generator"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { file = "LICENSE" }
+authors = [
+    { name = "Zafer Balkan" },
+]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Environment :: Console",
+    "Environment :: X11 Applications :: Qt",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Build Tools",
+    "Topic :: System :: Software Distribution",
+]
 dependencies = [
-    "PyYAML>=6",
-    "pydantic>=1.10",
+    "PyYAML>=6.0.2,<7",
+    "pydantic>=1.10.22,<2",
+    "zstandard>=0.23.0,<0.24",
 ]
 
 [project.optional-dependencies]
-gui = ["PyQt5>=5.15"]
+gui = ["PyQt5>=5.15.11,<5.16"]
 test = [
-    "pytest>=7.4",
-    "pytest-qt>=4.4",
+    "pytest>=8.3.5,<9",
+    "pytest-qt>=4.4.0,<5",
 ]
+
+[project.urls]
+Homepage = "https://github.com/zbalkan/pisicevir"
+Repository = "https://github.com/zbalkan/pisicevir"
+Issues = "https://github.com/zbalkan/pisicevir/issues"
 
 [project.scripts]
 pisicevir = "pisicevir.cli:main"
@@ -27,6 +50,7 @@ pisicevir-gui = "pisicevir.gui:main"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+qt_api = "pyqt5"
 
 [tool.setuptools.dynamic]
 version = { attr = "pisicevir.__version__" }
