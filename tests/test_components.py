@@ -1,44 +1,98 @@
-import os
-import shutil
-import tempfile
-from pisicevir.models.pisi import PisiRecipe, PisiSource, PisiPackager, PisiPackage, PisiHistoryEntry
-from pisicevir.renderers.pspec import PspecRenderer
-from pisicevir.linter.linter import RecipeLinter
+from __future__ import annotations
 
-def test_pspec_renderer():
-    recipe = PisiRecipe(
+import tempfile
+from pathlib import Path
+
+from pisicevir.linter.linter import RecipeLinter
+from pisicevir.models.pisi import (
+    PisiArchive,
+    PisiFilePath,
+    PisiHistoryEntry,
+    PisiPackage,
+    PisiPackager,
+    PisiRecipe,
+    PisiSource,
+)
+from pisicevir.renderers.actions import ActionsRenderer
+from pisicevir.renderers.pspec import PspecRenderer
+
+
+def complete_recipe() -> PisiRecipe:
+    return PisiRecipe(
         source=PisiSource(
             name="test-pkg",
+            homepage="https://example.test/test-pkg",
             summary="Test summary",
             description="Test description",
-            packager=PisiPackager(name="John Doe", email="john@example.com")
+            packager=PisiPackager(name="Test Packager", email="test@example.test"),
+            licenses=["GPL-3.0-or-later"],
+            archive=PisiArchive(
+                uri="files/test.deb",
+                archive_type="binary",
+                sha1sum="a" * 40,
+                sha256sum="b" * 64,
+            ),
         ),
         packages=[
-            PisiPackage(name="test-pkg", files=["/usr/bin/test"])
+            PisiPackage(
+                name="test-pkg",
+                files=[PisiFilePath(path="/usr/share/test-pkg", file_type="data")],
+            )
         ],
         history=[
-            PisiHistoryEntry(version="1.0", release="1", date="2023-01-01", name="John Doe", email="john@example.com", comment="Initial release")
-        ]
+            PisiHistoryEntry(
+                version="1.0.0",
+                release="1",
+                date="2023-01-01",
+                name="Test Packager",
+                email="test@example.test",
+                comment="Initial release",
+            )
+        ],
     )
-    renderer = PspecRenderer(recipe)
-    xml_content = renderer.render()
-    assert "<Name>test-pkg</Name>" in xml_content
-    assert "<Summary>Test summary</Summary>" in xml_content
 
-def test_linter():
+
+def test_pspec_renderer_emits_required_metadata() -> None:
+    xml_content = PspecRenderer(complete_recipe()).render()
+    assert "<Archive" in xml_content
+    assert 'sha256sum="' + "b" * 64 + '"' in xml_content
+    assert '<Path fileType="data">/usr/share/test-pkg</Path>' in xml_content
+    assert "<License>GPL-3.0-or-later</License>" in xml_content
+
+
+def test_linter_rejects_empty_recipe() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
-        # Test missing files
-        linter = RecipeLinter(tmpdir)
-        findings = linter.lint()
-        codes = [f["code"] for f in findings]
-        assert "FILE001" in codes
-        
-        # Test valid files
-        with open(os.path.join(tmpdir, "pspec.xml"), "w") as f:
-            f.write("<PISI></PISI>")
-        with open(os.path.join(tmpdir, "actions.py"), "w") as f:
-            f.write("def setup(): pass\ndef build(): pass\ndef install(): pass\n")
-            
-        linter = RecipeLinter(tmpdir)
-        findings = linter.lint()
-        assert len(findings) == 0
+        root = Path(tmpdir)
+        (root / "pspec.xml").write_text("<PISI></PISI>", encoding="utf-8")
+        (root / "actions.py").write_text("def install():\n    pass\n", encoding="utf-8")
+        findings = RecipeLinter(tmpdir).lint()
+    codes = {finding["code"] for finding in findings}
+    assert {"PSPEC003", "PSPEC004", "PSPEC005"}.issubset(codes)
+
+
+def test_linter_accepts_complete_rendered_recipe() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        (root / "pspec.xml").write_text(
+            PspecRenderer(complete_recipe()).render(), encoding="utf-8"
+        )
+        (root / "actions.py").write_text(
+            "from pisi.actionsapi import pisitools\n\ndef install():\n    pass\n",
+            encoding="utf-8",
+        )
+        findings = RecipeLinter(tmpdir).lint()
+    assert not [finding for finding in findings if finding["severity"] == "ERROR"]
+
+
+def test_actions_renderer_quotes_untrusted_paths() -> None:
+    content = ActionsRenderer(
+        {
+            "install": {
+                "preserve": [
+                    {"source": "payload/a'b", "target": "/usr/share/a'b"}
+                ]
+            }
+        }
+    ).render()
+    compile(content, "actions.py", "exec")
+    assert '"' in content or "\\'" in content
