@@ -4,6 +4,8 @@ from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field
 
+from pisicevir.models.debian import DebianDependencyGroup
+
 
 PayloadKind = Literal["file", "directory", "symlink", "hardlink", "other"]
 
@@ -27,6 +29,7 @@ class DebInspection(BaseModel):
     sha256: str
     architecture: Optional[str] = None
     metadata: Dict[str, str] = Field(default_factory=dict)
+    dependencies: Dict[str, List[DebianDependencyGroup]] = Field(default_factory=dict)
     payload: List[PayloadEntry] = Field(default_factory=list)
     maintainer_scripts: Dict[str, str] = Field(default_factory=dict)
     conffiles: List[str] = Field(default_factory=list)
