@@ -28,7 +28,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       TZ: UTC
       MAINTAINER_NAME: Zafer Balkan
-      MAINTAINER_EMAIL: zbalkan@users.noreply.github.com
+      MAINTAINER_EMAIL: zafer@zaferbalkan.com
       PROJECT_HOMEPAGE: https://github.com/zbalkan/pisicevir
       DEB_BUILD_OPTIONS: noautodbgsym reproducible=+fixfilepath
       DEB_BUILD_MAINT_OPTIONS: hardening=+all reproducible=+fixfilepath

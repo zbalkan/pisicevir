@@ -36,7 +36,7 @@ pisicevir (0.1.0-1) noble; urgency=medium
 
   * Local test build.
 
- -- Zafer Balkan <zbalkan@users.noreply.github.com>  Thu, 01 Jan 1970 00:00:00 +0000
+ -- Zafer Balkan <zafer@zaferbalkan.com>  Thu, 01 Jan 1970 00:00:00 +0000
 EOF
 ```
 
@@ -46,7 +46,7 @@ Generate the packaging directory:
 python tools/generate_debian_packaging.py \
   --changelog dist/debian-changelog \
   --maintainer-name "Zafer Balkan" \
-  --maintainer-email "zbalkan@users.noreply.github.com" \
+  --maintainer-email "zafer@zaferbalkan.com" \
   --homepage "https://github.com/zbalkan/pisicevir"
 ```
 

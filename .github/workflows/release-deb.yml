@@ -24,7 +24,7 @@ jobs:
       QT_QPA_PLATFORM: offscreen
       TZ: UTC
       MAINTAINER_NAME: Zafer Balkan
-      MAINTAINER_EMAIL: zbalkan@users.noreply.github.com
+      MAINTAINER_EMAIL: zafer@zaferbalkan.com
       PROJECT_HOMEPAGE: https://github.com/zbalkan/pisicevir
 
     steps:
