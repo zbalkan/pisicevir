@@ -8,7 +8,7 @@ import tarfile
 from email.parser import Parser
 from email.policy import compat32
 from pathlib import Path, PurePosixPath
-from typing import BinaryIO, Dict, Iterable, List, Optional
+from typing import IO, Any, BinaryIO, Dict, Iterable, List
 
 import zstandard
 
@@ -29,7 +29,7 @@ class DebAdapter:
     def __init__(self, path: str):
         self.path = Path(path)
 
-    def inspect(self) -> Dict[str, object]:
+    def inspect(self) -> Dict[str, Any]:
         if not self.path.is_file():
             raise FileNotFoundError(f"Package not found: {self.path}")
 
@@ -148,8 +148,8 @@ class DebAdapter:
                     continue
 
                 kind = "other"
-                link_target: Optional[str] = None
-                sha256: Optional[str] = None
+                link_target: str | None = None
+                sha256: str | None = None
                 is_elf = False
                 is_script = False
 
@@ -267,13 +267,13 @@ class DebAdapter:
 
     @staticmethod
     def _read_member(archive: tarfile.TarFile, member: tarfile.TarInfo) -> bytes:
-        stream: Optional[BinaryIO] = archive.extractfile(member)
+        stream: IO[bytes] | None = archive.extractfile(member)
         if stream is None:
             raise DebFormatError(f"Unable to read archive member: {member.name}")
         return stream.read()
 
     def _read_lines(
-        self, archive: tarfile.TarFile, member: Optional[tarfile.TarInfo]
+        self, archive: tarfile.TarFile, member: tarfile.TarInfo | None
     ) -> List[str]:
         if member is None:
             return []

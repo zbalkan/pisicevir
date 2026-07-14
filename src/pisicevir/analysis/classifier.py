@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List
 
 from pisicevir.models.source import PayloadEntry
-
 
 _LIBRARY_RE = re.compile(r"(?:^|/)lib[^/]+\.so(?:\.[0-9]+)*$")
 _SERVICE_PATHS = (
@@ -46,7 +45,7 @@ class Classifier:
         self,
         metadata: Dict[str, Any],
         payload: Iterable[Dict[str, Any] | PayloadEntry],
-        maintainer_scripts: Optional[Dict[str, str]] = None,
+        maintainer_scripts: Dict[str, str] | None = None,
     ):
         self.metadata = metadata
         self.payload = [

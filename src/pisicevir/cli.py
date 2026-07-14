@@ -4,7 +4,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
-from typing import Optional, Sequence
+from typing import Sequence
 
 import yaml
 
@@ -15,7 +15,6 @@ from pisicevir.linter.linter import RecipeLinter
 from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.source_adapters.deb import DebAdapter, DebFormatError
 from pisicevir.validation.validator import ArtifactValidator
-
 
 EXIT_OK = 0
 EXIT_INTERNAL = 1
@@ -80,7 +79,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if not args.command:
@@ -212,7 +211,7 @@ def _validate(args: argparse.Namespace) -> int:
     return EXIT_OK if result["valid"] else EXIT_LINT
 
 
-def _emit(content: str, output: Optional[str]) -> None:
+def _emit(content: str, output: str | None) -> None:
     if output:
         path = Path(output)
         path.parent.mkdir(parents=True, exist_ok=True)

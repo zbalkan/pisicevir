@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
 from pydantic import BaseModel, Field, validator
 
@@ -18,8 +18,8 @@ class PisiArchive(BaseModel):
 
 class PisiDependency(BaseModel):
     name: str
-    version: Optional[str] = None
-    release: Optional[str] = None
+    version: str | None = None
+    release: str | None = None
 
 
 class PisiFilePath(BaseModel):
@@ -55,8 +55,8 @@ class PisiHistoryEntry(BaseModel):
 
 class PisiPackage(BaseModel):
     name: str
-    summary: Optional[str] = None
-    description: Optional[str] = None
+    summary: str | None = None
+    description: str | None = None
     runtime_dependencies: List[PisiDependency] = Field(default_factory=list)
     files: List[PisiFilePath] = Field(default_factory=list)
 

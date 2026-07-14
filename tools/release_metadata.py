@@ -9,8 +9,7 @@ import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable, Optional, Sequence
-
+from typing import Sequence
 
 _SEMVER_RE = re.compile(
     r"^(0|[1-9][0-9]*)\."
@@ -123,11 +122,11 @@ def reachable_versions() -> list[tuple[SemVer, str]]:
     return versions
 
 
-def validate_release(output: Optional[Path]) -> dict[str, str]:
+def validate_release(output: Path | None) -> dict[str, str]:
     subprocess.run(["git", "fetch", "--tags", "--force"], check=True)
     current = SemVer.parse(read_source_version())
     versions = reachable_versions()
-    latest_version: Optional[SemVer] = None
+    latest_version: SemVer | None = None
     latest_tag = ""
     if versions:
         latest_version, latest_tag = max(versions, key=lambda item: item[0].precedence_key())
@@ -258,7 +257,7 @@ def parser() -> argparse.ArgumentParser:
     return root
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     if args.command == "validate":
         values = validate_release(args.github_output)

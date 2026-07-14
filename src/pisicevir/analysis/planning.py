@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-from typing import Any, Dict, Iterable, Optional
+from typing import Any, Dict, Iterable
 
 from pisicevir.analysis.dependency_resolution import installed_dependency_mappings
-
 
 _DEPENDENCY_FIELDS = ("Pre-Depends", "Depends")
 
@@ -13,7 +12,7 @@ def create_initial_plan(
     classification: Dict[str, Any],
     *,
     homepage: str = "",
-    licenses: Optional[Iterable[str]] = None,
+    licenses: Iterable[str] | None = None,
     packager_name: str = "",
     packager_email: str = "",
     resolve_installed_dependencies: bool = False,

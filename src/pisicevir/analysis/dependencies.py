@@ -3,11 +3,7 @@ from __future__ import annotations
 import re
 from typing import Iterable, List
 
-from pisicevir.models.debian import (
-    DebianDependencyAlternative,
-    DebianDependencyGroup,
-)
-
+from pisicevir.models.debian import DebianDependencyAlternative, DebianDependencyGroup
 
 _ALTERNATIVE_RE = re.compile(
     r"^\s*"

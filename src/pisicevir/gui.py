@@ -7,26 +7,11 @@ from importlib import resources
 from typing import Any, Dict
 
 import yaml
-from PyQt5.QtCore import QThread, Qt, QUrl, pyqtSignal
+from PyQt5.QtCore import Qt, QThread, QUrl, pyqtSignal
 from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPalette, QPixmap
-from PyQt5.QtWidgets import (
-    QAction,
-    QApplication,
-    QFileDialog,
-    QHBoxLayout,
-    QLabel,
-    QListWidget,
-    QMainWindow,
-    QMessageBox,
-    QSizePolicy,
-    QPushButton,
-    QSplitter,
-    QStatusBar,
-    QTabWidget,
-    QTextEdit,
-    QVBoxLayout,
-    QWidget,
-)
+from PyQt5.QtWidgets import (QAction, QApplication, QFileDialog, QHBoxLayout, QLabel,
+                             QListWidget, QMainWindow, QMessageBox, QPushButton, QSizePolicy,
+                             QSplitter, QStatusBar, QTabWidget, QTextEdit, QVBoxLayout, QWidget)
 
 from pisicevir import __version__
 from pisicevir.analysis.classifier import Classifier

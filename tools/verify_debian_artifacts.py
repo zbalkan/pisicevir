@@ -5,8 +5,7 @@ import argparse
 import subprocess
 import tarfile
 from pathlib import PurePosixPath
-from typing import Optional, Sequence
-
+from typing import Sequence
 
 FORBIDDEN_PARTS = {
     ".git",
@@ -72,7 +71,7 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     for package in args.packages:
         verify(package)

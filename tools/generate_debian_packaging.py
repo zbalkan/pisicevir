@@ -4,8 +4,7 @@ from __future__ import annotations
 import argparse
 import shutil
 from pathlib import Path
-from typing import Optional, Sequence
-
+from typing import Sequence
 
 CONTROL_TEMPLATE = """Source: pisicevir
 Section: devel
@@ -244,7 +243,7 @@ def parser() -> argparse.ArgumentParser:
     return result
 
 
-def main(argv: Optional[Sequence[str]] = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     args = parser().parse_args(argv)
     generate(
         args.output,
