@@ -14,6 +14,7 @@ from pisicevir.analysis.planning import create_initial_plan
 from pisicevir.linter.linter import RecipeLinter
 from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.source_adapters.deb import DebAdapter, DebFormatError
+from pisicevir.validation.validator import ArtifactValidator
 
 
 EXIT_OK = 0
@@ -64,9 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser = subparsers.add_parser("build", help="build a PISI package")
     build_parser.add_argument("path")
 
-    validate_parser = subparsers.add_parser("validate", help="validate a PISI package")
+    validate_parser = subparsers.add_parser(
+        "validate", help="validate a generated PISI recipe"
+    )
     validate_parser.add_argument("package")
-    validate_parser.add_argument("--stage")
+    validate_parser.add_argument(
+        "--stage", choices=sorted(ArtifactValidator.SUPPORTED_STAGES), default="recipe"
+    )
+    validate_parser.add_argument("--format", choices=["text", "json"], default="text")
 
     publish_parser = subparsers.add_parser("publish", help="publish a PISI package")
     publish_parser.add_argument("package")
@@ -92,6 +98,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return _generate(args)
         if args.command == "lint":
             return _lint(args)
+        if args.command == "validate":
+            return _validate(args)
         print(f"Command '{args.command}' is not implemented.", file=sys.stderr)
         return EXIT_UNSUPPORTED
     except (FileNotFoundError, DebFormatError, ValueError, yaml.YAMLError) as exc:
@@ -192,6 +200,15 @@ def _lint(args: argparse.Namespace) -> int:
     if "ERROR" in severities or (args.strict and "WARN" in severities):
         return EXIT_LINT
     return EXIT_OK
+
+
+def _validate(args: argparse.Namespace) -> int:
+    result = ArtifactValidator(args.package, stage=args.stage).validate()
+    if args.format == "json":
+        print(ArtifactValidator.render_json(result), end="")
+    else:
+        print(ArtifactValidator.render_text(result), end="")
+    return EXIT_OK if result["valid"] else EXIT_LINT
 
 
 def _emit(content: str, output: Optional[str]) -> None:

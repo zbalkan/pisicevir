@@ -26,6 +26,7 @@ pisicevir classify package.deb
 pisicevir plan package.deb --output plan.yaml
 pisicevir generate package.deb --plan plan.yaml --output recipe/
 pisicevir lint recipe/ --strict
+pisicevir validate recipe/ --format json
 ```
 
 The generated plan is deliberately unapproved. Review and edit it before setting `approved: true`.
