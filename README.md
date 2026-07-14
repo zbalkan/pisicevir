@@ -36,12 +36,7 @@ pisicevir lint recipe/ --strict
 pisicevir validate recipe/ --format json
 ```
 
-The generated plan is deliberately unapproved. Review and edit it before setting `approved: true`.
-When `pisicevir plan` runs on a Debian host, unambiguous dependencies that are
-already installed according to `dpkg-query` are pre-filled in `dependencies.map`
-using the Debian package name without architecture qualifiers (for example,
-`python3:any` maps to `python3`). Review these mappings before generation,
-especially when the target PISI distribution uses different package names.
+The generated plan is deliberately unapproved. Review and edit it before setting `approved: true`. When `pisicevir plan` runs on a Debian host, unambiguous dependencies that are already installed according to `dpkg-query` are pre-filled in `dependencies.map` using the Debian package name without architecture qualifiers (for example, `python3:any` maps to `python3`). Review these mappings before generation, especially when the target PISI distribution uses different package names.
 
 ## Development
 
@@ -93,3 +88,10 @@ Git tags, Debian versions, artifact names, release notes, and the Debian changel
 ## License
 
 Pisicevir is licensed under GPL-3.0-or-later. See [LICENSE](LICENSE).
+
+## Trademark & Logo Attribution
+
+**pisicevir** is an independent, community-developed companion tool.
+
+- **Trademarks:** **PISI** is a registered trademark of **PISI Linux Community**. This project is not affiliated with, endorsed by, or sponsored by the **PISI** project or its community.
+- **Logo:** The **PISI** logo used in this repository is the property of **PISI Linux Community**. It is used here solely for informational and referential purposes to indicate compatibility with their software.
