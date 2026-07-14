@@ -188,6 +188,48 @@ jobs:
           /usr/bin/python3 -c 'import pisicevir; print(pisicevir.__version__)'
           QT_QPA_PLATFORM=offscreen /usr/bin/python3 -c \
             'from pisicevir.gui import PisicevirGUI; print(PisicevirGUI)'
+
+      - name: Build dogfood PISI recipe archive
+        run: |
+          set -euo pipefail
+          mkdir -p dist/pisi
+          deb_package=$(find /tmp/pisicevir-build-1 -maxdepth 1 -type f \
+            -name 'pisicevir_*.deb' ! -name 'pisicevir-gui_*' -print -quit)
+          test -n "$deb_package"
+
+          /usr/bin/pisicevir plan "$deb_package" \
+            --homepage "$PROJECT_HOMEPAGE" \
+            --license GPL-3.0-or-later \
+            --packager-name "$MAINTAINER_NAME" \
+            --packager-email "$MAINTAINER_EMAIL" \
+            --output dist/pisi/plan.yml
+
+          python <<'PY'
+          from pathlib import Path
+          import yaml
+
+          path = Path("dist/pisi/plan.yml")
+          plan = yaml.safe_load(path.read_text(encoding="utf-8"))
+          plan.update(
+              {
+                  "approved": True,
+                  "homepage": "https://github.com/zbalkan/pisicevir",
+                  "licenses": ["GPL-3.0-or-later"],
+                  "packager": {
+                      "name": "Zafer Balkan",
+                      "email": "zafer@zaferbalkan.com",
+                  },
+              }
+          )
+          path.write_text(yaml.safe_dump(plan, sort_keys=False), encoding="utf-8")
+          PY
+
+          /usr/bin/pisicevir generate "$deb_package" \
+            --plan dist/pisi/plan.yml \
+            --output dist/pisi/recipe
+          tar --create --xz --file dist/pisi/pisicevir-devel.tar.xz \
+            --directory dist/pisi recipe plan.yml
+
           sudo apt-get purge -qq --yes pisicevir-gui pisicevir
 
       - name: Collect release evidence
@@ -199,6 +241,7 @@ jobs:
           cp /tmp/pisicevir-build-1/*.buildinfo dist/debian/
           cp dist/debian-changelog dist/debian/debian-changelog
           cp dist/RELEASE-NOTES.md dist/debian/RELEASE-NOTES.md
+          cp dist/pisi/pisicevir-devel.tar.xz dist/debian/pisicevir-devel.tar.xz
           dpkg-query -W -f='${binary:Package}=${Version}\n' | sort > \
             dist/debian/BUILD-ENVIRONMENT.txt
           (

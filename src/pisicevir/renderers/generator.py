@@ -124,10 +124,9 @@ class RecipeGenerator:
     def _validate_inputs(self) -> None:
         if not self.source_path.is_file():
             raise FileNotFoundError(f"Source package not found: {self.source_path}")
-        if self.plan.get("approved") is not True:
-            raise ValueError(
-                "Transformation plan must be reviewed and set approved: true before generation"
-            )
+        missing_review_fields = self._missing_review_fields()
+        if missing_review_fields:
+            raise ValueError(self._format_missing_review_fields(missing_review_fields))
         if self.plan.get("source_type") != "deb":
             raise ValueError("Only Debian source plans are currently supported")
         if self.plan.get("source_sha256") != self.inspection.get("sha256"):
@@ -143,19 +142,42 @@ class RecipeGenerator:
                 "Packages requiring native review cannot be generated automatically"
             )
 
-        packager = self.plan.get("packager", {})
-        if not packager.get("name") or not packager.get("email"):
-            raise ValueError("Plan must define packager name and email")
+        self._validate_dependency_decisions()
+        self._validate_payload_decisions()
+
+    def _missing_review_fields(self) -> List[str]:
+        missing: List[str] = []
+        if self.plan.get("approved") is not True:
+            missing.append("approved")
         if not self.plan.get("homepage"):
-            raise ValueError("Plan must define a homepage")
+            missing.append("homepage")
         licenses = self.plan.get("licenses", [])
         if not licenses or any(
             value in {"UNKNOWN", "NOASSERTION"} for value in licenses
         ):
-            raise ValueError("Plan must define reviewed package licensing")
+            missing.append("licenses")
+        packager = self.plan.get("packager", {})
+        if not packager.get("name"):
+            missing.append("packager.name")
+        if not packager.get("email"):
+            missing.append("packager.email")
+        return missing
 
-        self._validate_dependency_decisions()
-        self._validate_payload_decisions()
+    def _format_missing_review_fields(self, fields: List[str]) -> str:
+        field_guidance = {
+            "approved": "set approved: true after reviewing the plan",
+            "homepage": "enter the package homepage",
+            "licenses": "replace UNKNOWN/NOASSERTION with reviewed license identifiers",
+            "packager.name": "enter the PISI packager name",
+            "packager.email": "enter the PISI packager email",
+        }
+        details = "\n".join(
+            f"  - {field}: {field_guidance[field]}" for field in fields
+        )
+        return (
+            "Transformation plan still needs review updates before generation:\n"
+            f"{details}"
+        )
 
     def _validate_dependency_decisions(self) -> None:
         expected = set(self._expected_dependency_groups())

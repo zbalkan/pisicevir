@@ -87,7 +87,9 @@ def test_generator_rejects_unresolved_dependency_groups() -> None:
             packager_email="test@example.test",
         )
         plan["approved"] = True
-        generator = RecipeGenerator(package, inspection, plan, os.path.join(tmpdir, "recipe"))
+        generator = RecipeGenerator(
+            package, inspection, plan, os.path.join(tmpdir, "recipe")
+        )
         with pytest.raises(ValueError, match="unresolved"):
             generator.generate()
 
@@ -128,3 +130,32 @@ def test_generator_accepts_mapped_and_justifiably_ignored_dependencies(
         ).generate()
         pspec = Path(output, "pspec.xml").read_text(encoding="utf-8")
         assert "<Dependency>python3</Dependency>" in pspec
+
+
+def test_generator_reports_all_missing_review_fields() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        package = os.path.join(tmpdir, "test.deb")
+        create_dummy_deb(package)
+        inspection = DebAdapter(package).inspect()
+        classification = {
+            "conversion_class": "A",
+            "policy_family": "deb-data",
+            "confidence": "high",
+            "reasons": [],
+            "warnings": [],
+        }
+        plan = create_initial_plan(inspection, classification)
+        generator = RecipeGenerator(
+            package, inspection, plan, os.path.join(tmpdir, "recipe")
+        )
+
+        with pytest.raises(ValueError) as excinfo:
+            generator.generate()
+
+        message = str(excinfo.value)
+        assert "Transformation plan still needs review updates" in message
+        assert "approved" in message
+        assert "homepage" in message
+        assert "licenses" in message
+        assert "packager.name" in message
+        assert "packager.email" in message

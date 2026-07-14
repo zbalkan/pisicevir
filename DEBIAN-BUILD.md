@@ -72,6 +72,22 @@ dpkg-buildpackage --build=binary --unsigned-source --unsigned-changes
 
 The packages are written to the parent directory.
 
+
+## Dogfood PISI recipe archive
+
+After the Debian packages are built and installed for smoke testing, the release workflow uses the freshly built `pisicevir` Debian package as input to generate a reviewable PISI recipe. The workflow writes `dist/pisi/plan.yml`, sets the reviewed release values, generates `dist/pisi/recipe/`, and packs both into `dist/pisi/pisicevir-devel.tar.xz`:
+
+```yaml
+approved: true
+homepage: 'https://github.com/zbalkan/pisicevir'
+licenses: ['GPL-3.0-or-later']
+packager:
+  name: 'Zafer Balkan'
+  email: 'zafer@zaferbalkan.com'
+```
+
+The semi-baked archive is copied next to the `.deb` files in the release artifact and GitHub Release so testers can inspect the recipe before Pisicevir reaches a stable package format.
+
 ## Validate
 
 ```bash

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import sys
-import traceback
 from importlib import resources
 from typing import Any, Dict
 
@@ -47,8 +46,8 @@ class Worker(QThread):
                 self.finished.emit({"status": "success", "path": path})
                 return
             raise ValueError(f"Unknown worker action: {self.action}")
-        except Exception:
-            self.error.emit(traceback.format_exc())
+        except Exception as exc:
+            self.error.emit(str(exc))
 
 
 class PisicevirGUI(QMainWindow):

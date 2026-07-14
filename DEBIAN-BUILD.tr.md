@@ -72,6 +72,22 @@ dpkg-buildpackage --build=binary --unsigned-source --unsigned-changes
 
 Paketler üst dizine yazılır.
 
+## Kendi PISI tarif arşivini hazırlamak
+
+Debian paketleri oluşturulup temel fonksiyon testleri için kurulduktan sonra, iş akışı yeni oluşturulan `pisicevir` Debian paketini girdi olarak kullanarak incelenebilir bir PISI tarifi üretir. İş akışı `dist/pisi/plan.yml` dosyasını oluşturur, gözden geçirilmiş sürüm değerlerini ayarlar, `dist/pisi/recipe/` dizinini üretir ve her ikisini de `dist/pisi/pisicevir-devel.tar.xz` arşivinde paketler:
+
+```yaml
+approved: true
+homepage: 'https://github.com/zbalkan/pisicevir'
+licenses: ['GPL-3.0-or-later']
+packager:
+  name: 'Zafer Balkan'
+  email: 'zafer@zaferbalkan.com'
+```
+
+Bu yarı hazırlanmış arşiv, `.deb` dosyalarının yanına, sürüm çıktılarına ve GitHub Release’e kopyalanır. Böylece test kullanıcıları, Pisicevir kararlı bir paket biçimine ulaşmadan önce tarifi inceleyebilir.
+
+
 ## Doğrulama
 
 ```bash
