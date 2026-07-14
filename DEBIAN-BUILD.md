@@ -8,7 +8,7 @@ On an Ubuntu or Debian-compatible build host, install:
 
 ```bash
 sudo apt update
-sudo apt install \
+sudo apt install -y \
   binutils build-essential debhelper devscripts dh-python dpkg-dev fakeroot \
   libegl1 libgl1 libxkbcommon-x11-0 lintian pybuild-plugin-pyproject \
   python3-all python3-build python3-pydantic python3-pyqt5 python3-pytest \
@@ -77,11 +77,11 @@ The packages are written to the parent directory.
 ```bash
 lintian --fail-on error ../pisicevir_*.changes
 python tools/verify_debian_artifacts.py ../pisicevir_*.deb ../pisicevir-gui_*.deb
-sudo apt install ../pisicevir_*.deb ../pisicevir-gui_*.deb
+sudo apt install -y ../pisicevir_*.deb ../pisicevir-gui_*.deb
 /usr/bin/pisicevir --version
 QT_QPA_PLATFORM=offscreen /usr/bin/python3 -c \
   'from pisicevir.gui import PisicevirGUI; print(PisicevirGUI)'
-sudo apt purge pisicevir-gui pisicevir
+sudo apt purge -y pisicevir-gui pisicevir
 ```
 
 ## Reproducibility check

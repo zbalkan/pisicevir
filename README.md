@@ -24,6 +24,11 @@ pisicevir --help
 pisicevir inspect package.deb --format json
 pisicevir classify package.deb
 pisicevir plan package.deb --output plan.yaml
+```
+
+Update the `plan.yaml` manually. See [Safety Model](#safety-model) section for the mandatory changes.
+
+```bash
 pisicevir generate package.deb --plan plan.yaml --output recipe/
 pisicevir lint recipe/ --strict
 pisicevir validate recipe/ --format json
