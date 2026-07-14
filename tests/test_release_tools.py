@@ -60,6 +60,10 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         rules = (first / "rules").read_text(encoding="utf-8")
         cli_manifest = (first / "pisicevir.install").read_text(encoding="utf-8")
         gui_manifest = (first / "pisicevir-gui.install").read_text(encoding="utf-8")
+        cli_manpage = (first / "pisicevir.1").read_text(encoding="utf-8")
+        gui_manpage = (first / "pisicevir-gui.1").read_text(encoding="utf-8")
+        cli_overrides = (first / "pisicevir.lintian-overrides").read_text(encoding="utf-8")
+        gui_overrides = (first / "pisicevir-gui.lintian-overrides").read_text(encoding="utf-8")
 
         assert "python3-build" in control
         assert "python3-wheel" in control
@@ -69,3 +73,7 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         assert "--destdir=$(CURDIR)/debian/tmp" in rules
         assert "org.caracal.Pisicevir.desktop" in gui_manifest
         assert "org.caracal.Pisicevir.desktop" not in cli_manifest
+        assert ".TH PISICEVIR 1" in cli_manpage
+        assert ".TH PISICEVIR-GUI 1" in gui_manpage
+        assert "initial-upload-closes-no-bugs" in cli_overrides
+        assert "initial-upload-closes-no-bugs" in gui_overrides

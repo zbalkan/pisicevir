@@ -107,6 +107,67 @@ python3 -c 'import pisicevir; print(pisicevir.__version__)'
 python3 -c 'from pisicevir.source_adapters.deb import DebAdapter; print(DebAdapter)'
 """
 
+PISICEVIR_MANPAGE = r""".TH PISICEVIR 1 "" "Pisicevir" "User Commands"
+.SH NAME
+pisicevir \- inspect Debian packages and generate PISI recipes
+.SH SYNOPSIS
+.B pisicevir
+[\fB\-\-version\fR]
+[\fB\-h\fR]
+.I command
+[\fIoptions\fR]
+.SH DESCRIPTION
+.B pisicevir
+inspects external package artifacts, classifies conversion risk, and generates
+reviewable native PISI packaging projects. Debian package inspection is the
+first supported source adapter.
+.SH COMMANDS
+.TP
+.B inspect
+Inspect a Debian package.
+.TP
+.B classify
+Classify conversion risk for a Debian package.
+.TP
+.B plan
+Create a reviewable conversion plan.
+.TP
+.B generate
+Generate a PISI recipe from a plan.
+.TP
+.B lint
+Lint a generated PISI recipe.
+.SH OPTIONS
+.TP
+.B \-h, \-\-help
+Show command help.
+.TP
+.B \-\-version
+Show the installed Pisicevir version.
+.SH AUTHOR
+Pisicevir is maintained by the upstream project contributors.
+"""
+
+PISICEVIR_GUI_MANPAGE = r""".TH PISICEVIR-GUI 1 "" "Pisicevir" "User Commands"
+.SH NAME
+pisicevir-gui \- launch the Pisicevir graphical workbench
+.SH SYNOPSIS
+.B pisicevir-gui
+.SH DESCRIPTION
+.B pisicevir-gui
+starts the optional Qt workbench for inspecting Debian packages and reviewing
+transformation plans and lint findings.
+.SH OPTIONS
+The graphical workbench does not currently define command-line options.
+.SH AUTHOR
+Pisicevir is maintained by the upstream project contributors.
+"""
+
+LINTIAN_OVERRIDES = """# This package is released outside the Debian archive, so there is no Debian
+# initial packaging bug to close in the generated changelog.
+initial-upload-closes-no-bugs
+"""
+
 
 def write(path: Path, content: str, mode: int = 0o644) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -143,6 +204,10 @@ def generate(
         ),
     )
     write(output / "org.caracal.Pisicevir.desktop", DESKTOP)
+    write(output / "pisicevir.1", PISICEVIR_MANPAGE)
+    write(output / "pisicevir-gui.1", PISICEVIR_GUI_MANPAGE)
+    write(output / "pisicevir.lintian-overrides", LINTIAN_OVERRIDES)
+    write(output / "pisicevir-gui.lintian-overrides", LINTIAN_OVERRIDES)
     write(
         output / "pisicevir.install",
         "usr/bin/pisicevir\n"
