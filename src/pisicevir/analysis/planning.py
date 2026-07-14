@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, Iterable, Optional
 
+from pisicevir.analysis.dependency_resolution import installed_dependency_mappings
+
 
 _DEPENDENCY_FIELDS = ("Pre-Depends", "Depends")
 
@@ -14,6 +16,7 @@ def create_initial_plan(
     licenses: Optional[Iterable[str]] = None,
     packager_name: str = "",
     packager_email: str = "",
+    resolve_installed_dependencies: bool = False,
 ) -> Dict[str, Any]:
     dependency_groups = [
         group["raw"]
@@ -32,7 +35,9 @@ def create_initial_plan(
         "packager": {"name": packager_name, "email": packager_email},
         "dependencies": {
             "required": dependency_groups,
-            "map": {},
+            "map": installed_dependency_mappings(inspection.get("dependencies", {}))
+            if resolve_installed_dependencies
+            else {},
             "ignore": [],
         },
         "install": {

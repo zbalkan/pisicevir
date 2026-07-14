@@ -30,6 +30,11 @@ pisicevir validate recipe/ --format json
 ```
 
 The generated plan is deliberately unapproved. Review and edit it before setting `approved: true`.
+When `pisicevir plan` runs on a Debian host, unambiguous dependencies that are
+already installed according to `dpkg-query` are pre-filled in `dependencies.map`
+using the Debian package name without architecture qualifiers (for example,
+`python3:any` maps to `python3`). Review these mappings before generation,
+especially when the target PISI distribution uses different package names.
 
 ## Development
 

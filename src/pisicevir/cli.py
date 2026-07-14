@@ -167,6 +167,7 @@ def _plan(args: argparse.Namespace) -> int:
         licenses=args.licenses,
         packager_name=args.packager_name,
         packager_email=args.packager_email,
+        resolve_installed_dependencies=True,
     )
     rendered = yaml.safe_dump(plan, sort_keys=False)
     _emit(rendered, args.output)

@@ -83,7 +83,13 @@ def test_generate_unresolved_dependencies_prompts_for_install_or_mapping() -> No
     with tempfile.TemporaryDirectory() as tmpdir:
         package = os.path.join(tmpdir, "test.deb")
         plan_path = Path(tmpdir, "plan.yaml")
-        create_dummy_deb(package, depends="python3-yaml, binutils")
+        create_dummy_deb(
+            package,
+            depends=(
+                "definitely-not-installed-pisicevir-runtime, "
+                "definitely-not-installed-pisicevir-tool"
+            ),
+        )
 
         plan_result = run_cli(
             "plan",
@@ -115,8 +121,8 @@ def test_generate_unresolved_dependencies_prompts_for_install_or_mapping() -> No
 
     assert result.returncode == 8
     assert "Install or map these dependencies" in result.stderr
-    assert "  - binutils" in result.stderr
-    assert "  - python3-yaml" in result.stderr
+    assert "  - definitely-not-installed-pisicevir-runtime" in result.stderr
+    assert "  - definitely-not-installed-pisicevir-tool" in result.stderr
     assert "dependencies.map" in result.stderr
     assert "dependencies.ignore" in result.stderr
 
