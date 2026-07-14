@@ -1,0 +1,247 @@
+name: Release Debian packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-deb
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Validate, reproduce, tag, and release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+
+    env:
+      DEBIAN_FRONTEND: noninteractive
+      LC_ALL: C.UTF-8
+      PYTHONHASHSEED: "0"
+      PYTHONUNBUFFERED: "1"
+      QT_QPA_PLATFORM: offscreen
+      TZ: UTC
+      MAINTAINER_NAME: Zafer Balkan
+      MAINTAINER_EMAIL: zbalkan@users.noreply.github.com
+      PROJECT_HOMEPAGE: https://github.com/zbalkan/pisicevir
+
+    steps:
+      - name: Check out repository and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Require the default branch head
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          test "$GITHUB_REF_NAME" = "$DEFAULT_BRANCH"
+          git fetch origin "$DEFAULT_BRANCH" --tags --force
+          test "$(git rev-parse HEAD)" = "$(git rev-parse "origin/$DEFAULT_BRANCH")"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: requirements/ci.lock
+
+      - name: Install system build dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -qq --yes --no-install-recommends \
+            binutils \
+            build-essential \
+            debhelper \
+            devscripts \
+            dh-python \
+            dpkg-dev \
+            fakeroot \
+            libegl1 \
+            libgl1 \
+            libxkbcommon-x11-0 \
+            lintian \
+            pybuild-plugin-pyproject \
+            python3-all \
+            python3-build \
+            python3-wheel \
+            python3-pydantic \
+            python3-pyqt5 \
+            python3-pytest \
+            python3-pytestqt \
+            python3-setuptools \
+            python3-yaml \
+            python3-zstandard
+
+      - name: Install locked Python test environment
+        run: |
+          python -m pip install --quiet --no-deps --requirement requirements/ci.lock
+          python -m pip install --quiet --no-deps --no-build-isolation --editable .
+          python -m pip check
+
+      - name: Validate release version
+        id: version
+        run: python tools/release_metadata.py validate --github-output "$GITHUB_OUTPUT"
+
+      - name: Set reproducible build epoch
+        run: echo "SOURCE_DATE_EPOCH=${{ steps.version.outputs.source_date_epoch }}" >> "$GITHUB_ENV"
+
+      - name: Generate release notes and Debian changelog
+        run: |
+          python tools/release_metadata.py generate \
+            --version "${{ steps.version.outputs.version }}" \
+            --tag "${{ steps.version.outputs.tag }}" \
+            --previous-tag "${{ steps.version.outputs.latest_tag }}" \
+            --repository "${{ github.repository }}" \
+            --release-notes dist/RELEASE-NOTES.md \
+            --changelog dist/debian-changelog \
+            --maintainer-name "$MAINTAINER_NAME" \
+            --maintainer-email "$MAINTAINER_EMAIL" \
+            --source-date-epoch "$SOURCE_DATE_EPOCH"
+
+      - name: Run source tests
+        run: |
+          python -m compileall -q src tests tools
+          python -m pytest -q
+
+      - name: Create two isolated source snapshots
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/pisicevir-build-1 /tmp/pisicevir-build-2 /tmp/pisicevir-source.tar
+          mkdir -p /tmp/pisicevir-build-1 /tmp/pisicevir-build-2 /tmp/pisicevir-build-logs
+          git archive --format=tar --prefix="pisicevir-$VERSION/" HEAD > /tmp/pisicevir-source.tar
+
+          for build in 1 2; do
+            tar -xf /tmp/pisicevir-source.tar -C "/tmp/pisicevir-build-$build"
+            gzip -n -c /tmp/pisicevir-source.tar > \
+              "/tmp/pisicevir-build-$build/pisicevir_${VERSION}.orig.tar.gz"
+            cp dist/debian-changelog "/tmp/pisicevir-build-$build/debian-changelog"
+            (
+              cd "/tmp/pisicevir-build-$build/pisicevir-$VERSION"
+              python tools/generate_debian_packaging.py \
+                --changelog ../debian-changelog \
+                --maintainer-name "$MAINTAINER_NAME" \
+                --maintainer-email "$MAINTAINER_EMAIL" \
+                --homepage "$PROJECT_HOMEPAGE"
+              find . -exec touch --no-dereference --date="@$SOURCE_DATE_EPOCH" {} +
+            )
+          done
+
+      - name: Build Debian packages twice
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          DEB_BUILD_OPTIONS: noautodbgsym reproducible=+fixfilepath
+          DEB_BUILD_MAINT_OPTIONS: hardening=+all reproducible=+fixfilepath
+        run: |
+          set -euo pipefail
+          for build in 1 2; do
+            log="/tmp/pisicevir-build-logs/build-$build.log"
+            if ! (
+              cd "/tmp/pisicevir-build-$build/pisicevir-$VERSION"
+              PATH=/usr/sbin:/usr/bin:/sbin:/bin dpkg-buildpackage -us -uc -b
+            ) >"$log" 2>&1; then
+              echo "Debian build $build failed. Last 200 log lines:"
+              tail -n 200 "$log"
+              exit 1
+            fi
+            tail -n 20 "$log"
+          done
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-debian-build-diagnostics-${{ github.run_id }}
+          path: /tmp/pisicevir-build-logs/
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Compare reproducible package outputs
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(
+            find /tmp/pisicevir-build-1 -maxdepth 1 -type f -name '*.deb' -printf '%f\n' | sort
+          )
+          test "${#packages[@]}" -eq 2
+          for package in "${packages[@]}"; do
+            test -f "/tmp/pisicevir-build-2/$package"
+            cmp "/tmp/pisicevir-build-1/$package" "/tmp/pisicevir-build-2/$package"
+            sha256sum "/tmp/pisicevir-build-1/$package"
+          done
+
+      - name: Lint and inspect package payloads
+        run: |
+          set -euo pipefail
+          lintian --fail-on error /tmp/pisicevir-build-1/*.changes
+          python tools/verify_debian_artifacts.py /tmp/pisicevir-build-1/*.deb
+
+      - name: Install and smoke-test packages
+        run: |
+          set -euo pipefail
+          sudo apt-get install -qq --yes /tmp/pisicevir-build-1/*.deb
+          /usr/bin/pisicevir --version
+          /usr/bin/pisicevir --help >/dev/null
+          /usr/bin/python3 -c 'import pisicevir; print(pisicevir.__version__)'
+          QT_QPA_PLATFORM=offscreen /usr/bin/python3 -c \
+            'from pisicevir.gui import PisicevirGUI; print(PisicevirGUI)'
+          sudo apt-get purge -qq --yes pisicevir-gui pisicevir
+
+      - name: Collect release evidence
+        run: |
+          set -euo pipefail
+          mkdir -p dist/debian
+          cp /tmp/pisicevir-build-1/*.deb dist/debian/
+          cp /tmp/pisicevir-build-1/*.changes dist/debian/
+          cp /tmp/pisicevir-build-1/*.buildinfo dist/debian/
+          cp dist/debian-changelog dist/debian/debian-changelog
+          cp dist/RELEASE-NOTES.md dist/debian/RELEASE-NOTES.md
+          dpkg-query -W -f='${binary:Package}=${Version}\n' | sort > \
+            dist/debian/BUILD-ENVIRONMENT.txt
+          (
+            cd dist/debian
+            sha256sum * > SHA256SUMS
+          )
+
+      - name: Upload verified workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: pisicevir-${{ steps.version.outputs.version }}-debian
+          path: dist/debian/
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Create and push version tag
+        id: tag
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag --annotate "$TAG" --message "Pisicevir $VERSION"
+          git push origin "$TAG"
+          echo "pushed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release create "$TAG" dist/debian/* \
+            --verify-tag \
+            --title "Pisicevir $VERSION" \
+            --notes-file dist/RELEASE-NOTES.md
+
+      - name: Remove partial release and tag on failure or cancellation
+        if: (failure() || cancelled()) && steps.tag.outputs.pushed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          gh release delete "$TAG" --yes || true
+          git push --delete origin "$TAG" || true
