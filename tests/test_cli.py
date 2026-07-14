@@ -169,3 +169,25 @@ def test_validate_accepts_complete_recipe() -> None:
         result = run_cli("validate", os.fspath(recipe_dir))
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Result: valid" in result.stdout
+
+
+def test_install_command_reports_systemd_policy_error(monkeypatch, capsys) -> None:
+    from pisicevir import cli
+    from pisicevir.analysis.apt_policy import AptPolicyError
+
+    monkeypatch.setattr(
+        cli,
+        "enforce_systemd_free_policy",
+        lambda package: (_ for _ in ()).throw(
+            AptPolicyError(
+                "Installation blocked.\n\n"
+                'Package "foo" depends on a systemd-related package:\n\n'
+                "foo -> bar -> libsystemd0\n\n"
+                "This distribution does not support systemd-related packages.\n"
+                "Find a systemd-free Debian rebuild or use an alternative package."
+            )
+        ),
+    )
+
+    assert cli.main(["install", "foo"]) == cli.EXIT_UNSUPPORTED
+    assert "foo -> bar -> libsystemd0" in capsys.readouterr().err

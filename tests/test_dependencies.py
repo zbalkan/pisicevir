@@ -6,6 +6,12 @@ from pathlib import Path
 
 import pytest
 
+from pisicevir.analysis.apt_policy import (
+    AptPolicyError,
+    enforce_systemd_free_policy,
+    first_blocked_systemd_dependency,
+    is_systemd_related_package,
+)
 from pisicevir.analysis.dependencies import parse_dependency_expression
 from pisicevir.analysis import planning
 from pisicevir.analysis.planning import create_initial_plan
@@ -159,3 +165,60 @@ def test_generator_reports_all_missing_review_fields() -> None:
         assert "licenses" in message
         assert "packager.name" in message
         assert "packager.email" in message
+
+
+def test_systemd_policy_matches_any_systemd_package_name() -> None:
+    assert is_systemd_related_package("systemd")
+    assert is_systemd_related_package("systemd-sysv")
+    assert is_systemd_related_package("libsystemd0")
+    assert is_systemd_related_package("libpam-systemd")
+    assert is_systemd_related_package("libnss-systemd")
+    assert not is_systemd_related_package("elogind")
+
+
+def test_systemd_policy_resolves_dependency_closure_and_reports_path() -> None:
+    outputs = {
+        "foo": "foo\n  Depends: bar\n",
+        "bar": "bar\n  Depends: libsystemd0\n",
+    }
+
+    def runner(command, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = outputs[command[-1]]
+
+        return Result()
+
+    blocked = first_blocked_systemd_dependency("foo", runner=runner)
+
+    assert blocked is not None
+    assert blocked.requested_package == "foo"
+    assert blocked.blocking_dependency == "libsystemd0"
+    assert blocked.dependency_path == ("foo", "bar", "libsystemd0")
+
+
+def test_systemd_policy_error_message_matches_frontend_policy() -> None:
+    outputs = {
+        "foo": "foo\n  Depends: bar\n",
+        "bar": "bar\n  Depends: libsystemd0\n",
+    }
+
+    def runner(command, **kwargs):
+        class Result:
+            returncode = 0
+            stderr = ""
+            stdout = outputs[command[-1]]
+
+        return Result()
+
+    with pytest.raises(AptPolicyError) as excinfo:
+        enforce_systemd_free_policy("foo", runner=runner)
+
+    message = str(excinfo.value)
+    assert "Installation blocked." in message
+    assert 'Package "foo" depends on a systemd-related package:' in message
+    assert "foo -> bar -> libsystemd0" in message
+    assert (
+        "Find a systemd-free Debian rebuild or use an alternative package." in message
+    )

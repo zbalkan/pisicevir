@@ -11,6 +11,7 @@ import yaml
 from pisicevir import __version__
 from pisicevir.analysis.classifier import Classifier
 from pisicevir.analysis.planning import create_initial_plan
+from pisicevir.analysis.apt_policy import AptPolicyError, enforce_systemd_free_policy
 from pisicevir.linter.linter import RecipeLinter
 from pisicevir.renderers.generator import RecipeGenerator
 from pisicevir.source_adapters.deb import DebAdapter, DebFormatError
@@ -64,6 +65,14 @@ def build_parser() -> argparse.ArgumentParser:
     build_parser = subparsers.add_parser("build", help="build a PISI package")
     build_parser.add_argument("path")
 
+    install_parser = subparsers.add_parser(
+        "install", help="install a Debian package after policy checks"
+    )
+    install_parser.add_argument("package")
+    install_parser.add_argument(
+        "--dry-run", action="store_true", help="check policy without invoking apt-get"
+    )
+
     validate_parser = subparsers.add_parser(
         "validate", help="validate a generated PISI recipe"
     )
@@ -99,7 +108,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _lint(args)
         if args.command == "validate":
             return _validate(args)
+        if args.command == "install":
+            return _install(args)
         print(f"Command '{args.command}' is not implemented.", file=sys.stderr)
+        return EXIT_UNSUPPORTED
+    except AptPolicyError as exc:
+        print(exc, file=sys.stderr)
         return EXIT_UNSUPPORTED
     except (FileNotFoundError, DebFormatError, ValueError, yaml.YAMLError) as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -218,6 +232,16 @@ def _emit(content: str, output: str | None) -> None:
         path.write_text(content, encoding="utf-8", newline="\n")
     else:
         print(content, end="")
+
+
+def _install(args: argparse.Namespace) -> int:
+    import subprocess
+
+    enforce_systemd_free_policy(args.package)
+    if args.dry_run:
+        print(f"Policy check passed for {args.package}.")
+        return EXIT_OK
+    return subprocess.run(["apt-get", "install", args.package], check=False).returncode
 
 
 if __name__ == "__main__":
