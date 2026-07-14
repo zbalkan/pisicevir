@@ -302,9 +302,9 @@ class PisicevirGUI(QMainWindow):
             """
             <h2>PISI Linux</h2>
             <p>PISI Linux is an independent GNU/Linux distribution using PISI packages.</p>
-            <p>Website: <a href="https://pisilinux.com">pisilinux.com</a></p>
+            <p>Website: <a href="https://pisilinux.org">pisilinux.org</a></p>
             """,
-            "https://pisilinux.com",
+            "https://pisilinux.org",
             "Open Website",
         )
 
