@@ -62,6 +62,8 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         gui_manifest = (first / "pisicevir-gui.install").read_text(encoding="utf-8")
         cli_manpage = (first / "pisicevir.1").read_text(encoding="utf-8")
         gui_manpage = (first / "pisicevir-gui.1").read_text(encoding="utf-8")
+        cli_manpages = (first / "pisicevir.manpages").read_text(encoding="utf-8")
+        gui_manpages = (first / "pisicevir-gui.manpages").read_text(encoding="utf-8")
         cli_overrides = (first / "pisicevir.lintian-overrides").read_text(encoding="utf-8")
         gui_overrides = (first / "pisicevir-gui.lintian-overrides").read_text(encoding="utf-8")
 
@@ -75,5 +77,7 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         assert "org.caracal.Pisicevir.desktop" not in cli_manifest
         assert ".TH PISICEVIR 1" in cli_manpage
         assert ".TH PISICEVIR-GUI 1" in gui_manpage
-        assert "initial-upload-closes-no-bugs" in cli_overrides
-        assert "initial-upload-closes-no-bugs" in gui_overrides
+        assert "debian/pisicevir.1" in cli_manpages
+        assert "debian/pisicevir-gui.1" in gui_manpages
+        assert "pisicevir: initial-upload-closes-no-bugs" in cli_overrides
+        assert "pisicevir-gui: initial-upload-closes-no-bugs" in gui_overrides

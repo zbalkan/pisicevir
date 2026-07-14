@@ -165,7 +165,7 @@ Pisicevir is maintained by the upstream project contributors.
 
 LINTIAN_OVERRIDES = """# This package is released outside the Debian archive, so there is no Debian
 # initial packaging bug to close in the generated changelog.
-initial-upload-closes-no-bugs
+{package}: initial-upload-closes-no-bugs [usr/share/doc/{package}/changelog.Debian.gz:*]
 """
 
 
@@ -206,8 +206,14 @@ def generate(
     write(output / "org.caracal.Pisicevir.desktop", DESKTOP)
     write(output / "pisicevir.1", PISICEVIR_MANPAGE)
     write(output / "pisicevir-gui.1", PISICEVIR_GUI_MANPAGE)
-    write(output / "pisicevir.lintian-overrides", LINTIAN_OVERRIDES)
-    write(output / "pisicevir-gui.lintian-overrides", LINTIAN_OVERRIDES)
+    write(
+        output / "pisicevir.lintian-overrides",
+        LINTIAN_OVERRIDES.format(package="pisicevir"),
+    )
+    write(
+        output / "pisicevir-gui.lintian-overrides",
+        LINTIAN_OVERRIDES.format(package="pisicevir-gui"),
+    )
     write(
         output / "pisicevir.install",
         "usr/bin/pisicevir\n"
@@ -219,6 +225,8 @@ def generate(
         "usr/bin/pisicevir-gui\n"
         "debian/org.caracal.Pisicevir.desktop usr/share/applications\n",
     )
+    write(output / "pisicevir.manpages", "debian/pisicevir.1\n")
+    write(output / "pisicevir-gui.manpages", "debian/pisicevir-gui.1\n")
     write(output / "pisicevir.docs", "README.md\n")
     write(output / "pisicevir-gui.docs", "README.md\n")
     write(output / "tests/control", "Tests: smoke\nDepends: pisicevir\nRestrictions: superficial\n")
