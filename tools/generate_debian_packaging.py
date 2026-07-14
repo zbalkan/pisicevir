@@ -62,6 +62,7 @@ RULES = """#!/usr/bin/make -f
 export PYBUILD_TEST_ARGS=-ra -p no:cacheprovider --ignore=tests/test_release_tools.py
 export QT_QPA_PLATFORM=offscreen
 export PYTHONHASHSEED=0
+export PATH := /usr/sbin:/usr/bin:/sbin:/bin
 
 %:
 \tdh $@ --buildsystem=pybuild

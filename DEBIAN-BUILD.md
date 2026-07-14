@@ -11,8 +11,9 @@ sudo apt update
 sudo apt install \
   binutils build-essential debhelper devscripts dh-python dpkg-dev fakeroot \
   libegl1 libgl1 libxkbcommon-x11-0 lintian pybuild-plugin-pyproject \
-  python3-all python3-pydantic python3-pyqt5 python3-pytest \
-  python3-pytestqt python3-setuptools python3-yaml python3-zstandard
+  python3-all python3-build python3-pydantic python3-pyqt5 python3-pytest \
+  python3-pytestqt python3-setuptools python3-wheel python3-yaml \
+  python3-zstandard
 ```
 
 Install the locked Python test environment separately:
@@ -53,6 +54,8 @@ python tools/generate_debian_packaging.py \
 The generated `debian/` directory is ignored by Git.
 
 ## Build
+
+The generated Debian rules file resets `PATH` to system directories so `pybuild` uses the distribution Python interpreter and modules. This avoids accidentally invoking a partially populated virtual environment (for example `.venv/bin/python3.12`) during package builds.
 
 Set a stable build timestamp and build the binary packages:
 

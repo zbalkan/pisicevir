@@ -64,6 +64,7 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         assert "python3-build" in control
         assert "python3-wheel" in control
         assert "PYBUILD_NAME" not in rules
+        assert "export PATH := /usr/sbin:/usr/bin:/sbin:/bin" in rules
         assert "-p no:cacheprovider" in rules
         assert "--destdir=$(CURDIR)/debian/tmp" in rules
         assert "org.caracal.Pisicevir.desktop" in gui_manifest
