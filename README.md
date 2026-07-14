@@ -4,6 +4,8 @@ Pisicevir is a policy-driven external package importer and native PISI recipe ge
 
 The repository is an early implementation. Generated transformation plans require explicit review and approval, and generated PISI recipes still require a real PISI build and installation test before use.
 
+> Refer to [PISI Linux  Developer](https://developer.pisilinux.org/) page for more information.
+
 ## Safety model
 
 Pisicevir treats every external package as untrusted input. Debian archives are read without extracting them into the host filesystem. The adapter validates the outer archive, rejects unsafe paths and escaping links, records payload ownership and modes, hashes regular files, and surfaces maintainer scripts for manual lifecycle review.
