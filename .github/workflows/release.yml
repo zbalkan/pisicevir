@@ -1,4 +1,4 @@
-name: Release Debian packages
+name: Release packages
 
 on:
   workflow_dispatch:
