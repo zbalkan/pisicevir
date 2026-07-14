@@ -3,18 +3,22 @@ from __future__ import annotations
 import os
 import sys
 import traceback
+from importlib import resources
 from typing import Any, Dict
 
 import yaml
-from PyQt5.QtCore import QThread, Qt, pyqtSignal
-from PyQt5.QtGui import QColor, QFont, QPalette
+from PyQt5.QtCore import QThread, Qt, QUrl, pyqtSignal
+from PyQt5.QtGui import QColor, QDesktopServices, QFont, QIcon, QPalette, QPixmap
 from PyQt5.QtWidgets import (
+    QAction,
     QApplication,
     QFileDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
     QMainWindow,
+    QMessageBox,
+    QSizePolicy,
     QPushButton,
     QSplitter,
     QStatusBar,
@@ -24,6 +28,7 @@ from PyQt5.QtWidgets import (
     QWidget,
 )
 
+from pisicevir import __version__
 from pisicevir.analysis.classifier import Classifier
 from pisicevir.analysis.planning import create_initial_plan
 from pisicevir.linter.linter import RecipeLinter
@@ -71,22 +76,64 @@ class PisicevirGUI(QMainWindow):
         self.worker: Worker | None = None
         self.setup_ui()
 
+    def setup_about_menu(self) -> None:
+        help_menu = self.menuBar().addMenu("&Help")
+
+        about_pisicevir_action = QAction("About pisicevir", self)
+        about_pisicevir_action.setStatusTip("About pisicevir and its GitHub project")
+        about_pisicevir_action.triggered.connect(self.show_about_pisicevir)
+        help_menu.addAction(about_pisicevir_action)
+
+        about_pisi_action = QAction("About PISI Linux", self)
+        about_pisi_action.setStatusTip("About PISI Linux and its website")
+        about_pisi_action.triggered.connect(self.show_about_pisi_linux)
+        help_menu.addAction(about_pisi_action)
+
     def setup_ui(self) -> None:
+        self.setup_about_menu()
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(10, 10, 10, 10)
         main_layout.setSpacing(10)
 
+        logo_path = resources.files("pisicevir").joinpath("assets", "logo.png")
+        logo_pixmap = QPixmap(str(logo_path))
+        if not logo_pixmap.isNull():
+            self.setWindowIcon(QIcon(logo_pixmap))
+
+        header_layout = QHBoxLayout()
+        header_layout.setContentsMargins(0, 0, 0, 0)
+        header_layout.setSpacing(12)
+
+        logo_label = QLabel()
+        logo_label.setFixedSize(48, 48)
+        logo_label.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        logo_label.setAlignment(Qt.AlignCenter)
+        logo_label.setToolTip("Pisi Linux")
+        if not logo_pixmap.isNull():
+            logo_label.setPixmap(
+                logo_pixmap.scaled(
+                    48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation
+                )
+            )
+        header_layout.addWidget(logo_label)
+
         header = QLabel("Pisicevir Desktop")
         header.setFont(QFont("Sans Serif", 18, QFont.Bold))
-        main_layout.addWidget(header)
+        header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        header.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+        header_layout.addWidget(header, 1)
+        main_layout.addLayout(header_layout, 0)
 
         splitter = QSplitter(Qt.Horizontal)
-        main_layout.addWidget(splitter)
+        splitter.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        main_layout.addWidget(splitter, 1)
 
         left_panel = QWidget()
         left_layout = QVBoxLayout(left_panel)
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(8)
         self.btn_open = QPushButton("Open Package (.deb)")
         self.btn_open.setFixedHeight(40)
         self.btn_open.clicked.connect(self.open_package)
@@ -98,11 +145,14 @@ class PisicevirGUI(QMainWindow):
         left_layout.addWidget(self.info_label)
 
         self.list_files = QListWidget()
-        left_layout.addWidget(QLabel("Payload entries:"))
-        left_layout.addWidget(self.list_files)
+        payload_label = QLabel("Payload entries:")
+        payload_label.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
+        left_layout.addWidget(payload_label)
+        left_layout.addWidget(self.list_files, 1)
         splitter.addWidget(left_panel)
 
         self.tabs = QTabWidget()
+        self.tabs.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
         self.plan_text = QTextEdit()
         self.plan_text.setReadOnly(False)
         self.tabs.addTab(self.plan_text, "Transformation Plan")
@@ -110,6 +160,8 @@ class PisicevirGUI(QMainWindow):
         self.linter_text.setReadOnly(True)
         self.tabs.addTab(self.linter_text, "Linter Report")
         splitter.addWidget(self.tabs)
+        splitter.setStretchFactor(0, 0)
+        splitter.setStretchFactor(1, 1)
         splitter.setSizes([300, 700])
 
         bottom_layout = QHBoxLayout()
@@ -216,6 +268,45 @@ class PisicevirGUI(QMainWindow):
         self.status_bar.showMessage("Operation failed")
         self.linter_text.setPlainText(message)
         self.tabs.setCurrentIndex(1)
+
+    def show_about_dialog(
+        self, title: str, html: str, link_url: str, link_button_text: str
+    ) -> None:
+        dialog = QMessageBox(self)
+        dialog.setWindowTitle(title)
+        dialog.setTextFormat(Qt.RichText)
+        dialog.setTextInteractionFlags(Qt.TextBrowserInteraction)
+        dialog.setText(html)
+        link_button = dialog.addButton(link_button_text, QMessageBox.ActionRole)
+        dialog.addButton(QMessageBox.Ok)
+
+        dialog.exec_()
+        if dialog.clickedButton() is link_button:
+            QDesktopServices.openUrl(QUrl(link_url))
+
+    def show_about_pisicevir(self) -> None:
+        self.show_about_dialog(
+            "About pisicevir",
+            f"""
+            <h2>pisicevir {__version__}</h2>
+            <p>Policy-driven external package importer and native PISI recipe generator.</p>
+            <p>Project page: <a href="https://github.com/zbalkan/pisicevir">github.com/zbalkan/pisicevir</a></p>
+            """,
+            "https://github.com/zbalkan/pisicevir",
+            "Open GitHub",
+        )
+
+    def show_about_pisi_linux(self) -> None:
+        self.show_about_dialog(
+            "About PISI Linux",
+            """
+            <h2>PISI Linux</h2>
+            <p>PISI Linux is an independent GNU/Linux distribution using PISI packages.</p>
+            <p>Website: <a href="https://pisilinux.com">pisilinux.com</a></p>
+            """,
+            "https://pisilinux.com",
+            "Open Website",
+        )
 
 
 def main() -> int:
