@@ -2,9 +2,15 @@
 
 Pisicevir is a policy-driven external package importer and native PISI recipe generator. The first source adapter inspects Debian binary packages without installing them or executing their maintainer scripts.
 
+The name is chosen to carry the torch from [the legacy tool](https://github.com/pars-linux/pisicevir) with the same name.
+
 The repository is an early implementation. Generated transformation plans require explicit review and approval, and generated PISI recipes still require a real PISI build and installation test before use.
 
 > Refer to [PISI Linux  Developer](https://developer.pisilinux.org/) page for more information.
+
+![Pisicevir CLI](/assets/cli.png)
+
+![Pisicevir GUI](/assets/gui.png)
 
 ## Safety model
 

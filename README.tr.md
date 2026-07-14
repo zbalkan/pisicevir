@@ -2,9 +2,15 @@
 
 Pisicevir, politika odaklı, PISI'ye özgü bir tarif oluşturucusudur. İlk adaptör, Debian  paketlerini kurmadan veya bakımcı betiklerini çalıştırmadan inceler.
 
+Bu ad, aynı adı taşıyan [eski aracın](https://github.com/pars-linux/pisicevir) mirasını sürdürmek amacıyla seçilmiştir.
+
 Depo, erken aşamadaki bir uygulamadır. Oluşturulan dönüştürme planları açık inceleme ve onay gerektirir. Oluşturulan PISI tarifleri de kullanılmadan önce gerçek bir PISI derleme ve kurulum testinden geçirilmelidir.
 
 > Daha fazla bilgi için [PISI Linux  Developer](https://developer.pisilinux.org/) sayfasına başvurunuz.
+
+![Pisicevir CLI](/assets/cli.png)
+
+![Pisicevir GUI](/assets/gui.png)
 
 ## Güvenlik modeli
 
