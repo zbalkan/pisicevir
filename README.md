@@ -1,20 +1,34 @@
 # Pisicevir
 
-Pisicevir is a policy-driven external package importer and native PISI recipe generator. The first source adapter inspects Debian binary packages without installing them or executing their maintainer scripts.
+Pisicevir helps convert Debian binary packages (`.deb`) into reviewed PISI package recipes. It is **not** a universal package converter; the current implementation focuses on Debian-to-PISI workflows.
 
-The name is chosen to carry the torch from [the legacy tool](https://github.com/pars-linux/pisicevir) with the same name.
+The tool inspects a `.deb` file, builds a conversion plan, and generates a PISI recipe directory from the approved plan. It does not install the Debian package, run maintainer scripts, or produce a ready-to-publish PISI package without human review.
 
-The repository is an early implementation. Generated transformation plans require explicit review and approval, and generated PISI recipes still require a real PISI build and installation test before use.
+The name was chosen to carry forward the legacy of [the earlier tool](https://github.com/pars-linux/pisicevir) with the same name.
 
-> Refer to [PISI Linux  Developer](https://developer.pisilinux.org/) page for more information.
+The repository is an early implementation. Generated conversion plans require explicit review and approval, and generated PISI recipes still require a real PISI build and installation test before use.
+
+> See the [PISI Linux Developer](https://developer.pisilinux.org/) page for more information about PISI packaging.
 
 ![Pisicevir CLI](/assets/cli.png)
 
 ![Pisicevir GUI](/assets/gui.png)
 
+## What it does
+
+Pisicevir provides a review-first Debian-to-PISI recipe workflow:
+
+1. inspect a Debian binary package;
+2. classify package metadata and contents;
+3. create an editable conversion plan;
+4. generate a PISI recipe from the approved plan;
+5. lint and validate the generated recipe.
+
+The generated recipe is a starting point for PISI packaging, not a substitute for maintainer review.
+
 ## Safety model
 
-Pisicevir treats every external package as untrusted input. Debian archives are read without extracting them into the host filesystem. The adapter validates the outer archive, rejects unsafe paths and escaping links, records payload ownership and modes, hashes regular files, and surfaces maintainer scripts for manual lifecycle review.
+Pisicevir treats every Debian package as untrusted input. Debian archives are read without being extracted into the host filesystem. The adapter validates the outer archive, rejects unsafe paths and escaping links, records payload ownership and modes, hashes regular files, and surfaces maintainer scripts for manual lifecycle review.
 
 Recipe generation is blocked until the plan contains:
 
@@ -27,6 +41,8 @@ Recipe generation is blocked until the plan contains:
 
 ## Commands
 
+Inspect and plan a Debian package conversion:
+
 ```bash
 pisicevir --help
 pisicevir inspect package.deb --format json
@@ -34,7 +50,9 @@ pisicevir classify package.deb
 pisicevir plan package.deb --output plan.yaml
 ```
 
-Update the `plan.yaml` manually. See [Safety Model](#safety-model) section for the mandatory changes.
+Update `plan.yaml` manually. See [Safety model](#safety-model) for the mandatory fields.
+
+Generate and check the PISI recipe:
 
 ```bash
 pisicevir generate package.deb --plan plan.yaml --output recipe/
