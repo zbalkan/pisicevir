@@ -79,6 +79,48 @@ def test_validate_reports_recipe_status_as_json() -> None:
     assert document["summary"]["errors"] >= 1
 
 
+def test_generate_unresolved_dependencies_prompts_for_install_or_mapping() -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        package = os.path.join(tmpdir, "test.deb")
+        plan_path = Path(tmpdir, "plan.yaml")
+        create_dummy_deb(package, depends="python3-yaml, binutils")
+
+        plan_result = run_cli(
+            "plan",
+            package,
+            "--homepage",
+            "https://example.test/test-pkg",
+            "--license",
+            "GPL-3.0-or-later",
+            "--packager-name",
+            "Test Packager",
+            "--packager-email",
+            "test@example.test",
+            "--output",
+            os.fspath(plan_path),
+        )
+        assert plan_result.returncode == 0, plan_result.stderr
+        plan = yaml.safe_load(plan_path.read_text(encoding="utf-8"))
+        plan["approved"] = True
+        plan_path.write_text(yaml.safe_dump(plan, sort_keys=False), encoding="utf-8")
+
+        result = run_cli(
+            "generate",
+            package,
+            "--plan",
+            os.fspath(plan_path),
+            "--output",
+            os.path.join(tmpdir, "recipe"),
+        )
+
+    assert result.returncode == 8
+    assert "Install or map these dependencies" in result.stderr
+    assert "  - binutils" in result.stderr
+    assert "  - python3-yaml" in result.stderr
+    assert "dependencies.map" in result.stderr
+    assert "dependencies.ignore" in result.stderr
+
+
 def test_validate_accepts_complete_recipe() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         package = os.path.join(tmpdir, "test.deb")
