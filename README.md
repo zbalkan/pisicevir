@@ -60,6 +60,14 @@ pisicevir lint recipe/ --strict
 pisicevir validate recipe/ --format json
 ```
 
+Check whether an APT package can be installed on a systemd-free target before invoking `apt-get`:
+
+```bash
+pisicevir install package-name --dry-run
+```
+
+The install policy check resolves the package's `Depends` and `Pre-Depends` closure with `apt-cache depends --no-recommends --no-suggests`. If the requested package or any required dependency name matches `*systemd*` (for example, `systemd`, `libsystemd0`, or `libpam-systemd`), Pisicevir blocks the install and prints the dependency path so maintainers can choose a systemd-free Debian rebuild or another package. Without `--dry-run`, the same check runs first and `apt-get install package-name` is invoked only after the policy passes.
+
 The generated plan is deliberately unapproved. Review and edit it before setting `approved: true`. When `pisicevir plan` runs on a Debian host, unambiguous dependencies that are already installed according to `dpkg-query` are pre-filled in `dependencies.map` using the Debian package name without architecture qualifiers (for example, `python3:any` maps to `python3`). Review these mappings before generation, especially when the target PISI distribution uses different package names.
 
 ## Development

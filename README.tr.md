@@ -60,6 +60,14 @@ pisicevir lint recipe/ --strict
 pisicevir validate recipe/ --format json
 ```
 
+Bir APT paketinin `apt-get` çağrılmadan önce systemd içermeyen bir hedefe kurulup kurulamayacağını denetleyin:
+
+```bash
+pisicevir install package-name --dry-run
+```
+
+Kurulum ilke denetimi, paketin `Depends` ve `Pre-Depends` kapanışını `apt-cache depends --no-recommends --no-suggests` ile çözer. İstenen paket ya da zorunlu bağımlılıklarından herhangi birinin adı `*systemd*` kalıbıyla eşleşirse (örneğin `systemd`, `libsystemd0` veya `libpam-systemd`), Pisicevir kurulumu engeller ve bakımcıların systemd içermeyen bir Debian yeniden derlemesi ya da başka bir paket seçebilmesi için bağımlılık yolunu yazdırır. `--dry-run` kullanılmadığında da aynı denetim önce çalışır ve `apt-get install package-name` yalnızca ilke geçerse çağrılır.
+
 Oluşturulan plan kasıtlı olarak onaylanmamış durumdadır. `approved: true` ayarını yapmadan önce planı inceleyin ve düzenleyin. `pisicevir plan` bir Debian sisteminde çalıştırıldığında, `dpkg-query` verilerine göre önceden kurulmuş olan ve anlamı belirsiz olmayan bağımlılıklar, mimari niteleyicileri olmadan Debian paket adı kullanılarak `dependencies.map` içine önceden yazılır (örneğin `python3:any`, `python3` olarak eşlenir). Özellikle hedef PISI dağıtımında farklı paket adları kullanılıyorsa, oluşturma işleminden önce bu eşlemeleri inceleyin.
 
 ## Geliştirme
