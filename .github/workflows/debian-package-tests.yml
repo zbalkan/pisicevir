@@ -127,7 +127,7 @@ jobs:
               "%a, %d %b %Y %H:%M:%S +0000"
           )
           Path("dist/debian-changelog").write_text(
-              f"pisicevir ({version}-1) unstable; urgency=medium\n\n"
+              f"pisicevir ({version}-1) noble; urgency=medium\n\n"
               "  * Continuous integration reproducibility build.\n\n"
               f" -- {os.environ['MAINTAINER_NAME']} "
               f"<{os.environ['MAINTAINER_EMAIL']}>  {date}\n",

@@ -32,7 +32,7 @@ The software version comes from `src/pisicevir/__init__.py`. The normal release 
 ```bash
 mkdir -p dist
 cat > dist/debian-changelog <<'EOF'
-pisicevir (0.1.0-1) unstable; urgency=medium
+pisicevir (0.1.0-1) noble; urgency=medium
 
   * Local test build.
 

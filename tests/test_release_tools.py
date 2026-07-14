@@ -37,7 +37,7 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         root = Path(tmpdir)
         changelog = root / "changelog"
         changelog.write_text(
-            "pisicevir (0.1.0-1) unstable; urgency=medium\n\n"
+            "pisicevir (0.1.0-1) noble; urgency=medium\n\n"
             "  * Test release\n\n"
             " -- Test Packager <test@example.test>  Thu, 01 Jan 1970 00:00:00 +0000\n",
             encoding="utf-8",

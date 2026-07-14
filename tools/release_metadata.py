@@ -221,7 +221,7 @@ def generate_metadata(
         source_date_epoch, tz=timezone.utc
     ).strftime("%a, %d %b %Y %H:%M:%S +0000")
     changelog_lines = [
-        f"pisicevir ({version}-1) unstable; urgency=medium",
+        f"pisicevir ({version}-1) noble; urgency=medium",
         "",
     ]
     changelog_lines.extend(f"  * {subject}" for _, subject in commits)

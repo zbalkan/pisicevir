@@ -49,6 +49,7 @@ Section: devel
 Architecture: all
 Depends:
  ${{misc:Depends}},
+ ${{python3:Depends}},
  pisicevir (= ${{binary:Version}}),
  python3-pyqt5
 Description: graphical workbench for Pisicevir
