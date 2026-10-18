@@ -270,7 +270,7 @@ class RecipeGenerator:
                 raise ValueError(f"Payload link target was changed for {source}")
             from pathlib import PurePosixPath
             parts = PurePosixPath(target).parts
-            if ".." in parts or target != PurePosixPath(target).as_posix():
+            if target.startswith("//") or ".." in parts or target != PurePosixPath(target).as_posix():
                 raise ValueError(f"Invalid or non-normalized target path: {target}")
             for previous in targets:
                 if target.startswith(previous.rstrip("/") + "/") or previous.startswith(target.rstrip("/") + "/"):
