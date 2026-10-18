@@ -55,13 +55,13 @@ def _validate_link_target(member_path, raw_target):
 
 
 def _normalise_hardlink_target(raw_target):
-    if raw_target.startswith("/") or "\\\\" in raw_target:
+    raw_target = raw_target.replace("\\", "/")
+    if raw_target.startswith("/"):
         raise RuntimeError("Invalid hardlink target: %s" % raw_target)
     normalized = posixpath.normpath(raw_target)
     if normalized in ("", ".", "..") or normalized.startswith("../"):
         raise RuntimeError("Invalid hardlink target: %s" % raw_target)
     return normalized
-
 
 def _read_exact(stream, size, member_name):
     chunks = []
@@ -319,7 +319,7 @@ class ActionsRenderer:
                     raise ValueError(f"Hardlink has no link target: {source}")
                 # Debian tar hardlink names refer to archive-root paths.
                 # They are not resolved relative to the link's parent.
-                original = posixpath.normpath(link_target.removeprefix("./"))
+                original = posixpath.normpath(link_target.replace("\\", "/").removeprefix("./"))
                 if original.startswith("../") or original in ("..", ".") or original.startswith("/"):
                     raise ValueError(f"Invalid hardlink target: {source}")
                 resolved = source_targets.get(original)
@@ -397,7 +397,7 @@ class ActionsRenderer:
                 target = item.get("link_target")
                 if not isinstance(target, str):
                     raise ValueError(f"Hardlink missing target: {key}")
-                normalized = posixpath.normpath(target.removeprefix("./"))
+                normalized = posixpath.normpath(target.replace("\\", "/").removeprefix("./"))
                 if normalized.startswith("../") or normalized in ("..", ".") or normalized.startswith("/"):
                     raise ValueError(f"Invalid hardlink target: {key}")
                 dependency = by_source.get(normalized)
