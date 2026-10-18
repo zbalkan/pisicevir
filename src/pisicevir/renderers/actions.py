@@ -383,6 +383,8 @@ class ActionsRenderer:
                 if not isinstance(target, str):
                     raise ValueError(f"Hardlink missing target: {key}")
                 normalized = posixpath.normpath(target.removeprefix("./"))
+                if normalized.startswith("../") or normalized in ("..", ".") or normalized.startswith("/"):
+                    raise ValueError(f"Invalid hardlink target: {key}")
                 dependency = by_source.get(normalized)
                 if dependency is None:
                     raise ValueError(f"Hardlink target missing from plan: {key}")
