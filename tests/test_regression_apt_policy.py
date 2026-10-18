@@ -83,3 +83,16 @@ def test_shared_dependencies_are_queried_once():
         return CompletedProcess(args, 0, responses[args[-1]], "")
     assert first_blocked_systemd_dependency("example", runner=runner) is None
     assert calls.count("shared") == 1
+
+
+def test_apt_leading_pipe_group_uses_last_plain_candidate():
+    from pisicevir.analysis.apt_policy import _apt_dependency_groups
+    def runner(args, **kwargs):
+        return CompletedProcess(
+            args, 0,
+            " |Depends: systemd-helper\n  Depends: safe-helper\n  Depends: separate\n",
+            "",
+        )
+    assert _apt_dependency_groups("example", runner=runner) == [
+        ("systemd-helper", "safe-helper"), ("separate",)
+    ]
