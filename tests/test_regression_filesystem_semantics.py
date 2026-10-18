@@ -148,3 +148,89 @@ def test_backslash_hardlink_target_matches_archive_root_path():
     exec(compile(ast.Module(body=[helper], type_ignores=[]), "<helper>", "exec"),
          {"posixpath": posixpath}, namespace)
     assert namespace["_normalise_hardlink_target"](r"usr\lib\first") == "usr/lib/first"
+
+
+def _extractor_functions(plan):
+    import ast
+    import os
+    import posixpath
+    import shutil
+    import tarfile
+    from pathlib import Path, PurePosixPath
+
+    tree = ast.parse(ActionsRenderer(plan).render())
+    names = {
+        "_normalise_path", "_normalise_hardlink_target", "_validate_link_target",
+        "_ensure_no_link_parent", "_open_payload_archive", "_extract_selected",
+        "_read_exact", "_read_ar_data_member",
+    }
+    functions = [
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name in names
+    ]
+    ns = {
+        "os": os, "posixpath": posixpath, "shutil": shutil,
+        "tarfile": tarfile, "Path": Path, "PurePosixPath": PurePosixPath,
+        "_SELECTED": {op["source"][8:] for op in plan["install"]["preserve"]},
+        "_MAX_MEMBER_SIZE": 2 * 1024 * 1024 * 1024,
+        "_MAX_EXTRACTED_SIZE": 2 * 1024 * 1024 * 1024,
+        "_ALLOWED_AR_MEMBERS": {
+            "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
+            "control.tar.zst", "control.tar.bz2", "data.tar", "data.tar.gz",
+            "data.tar.xz", "data.tar.zst", "data.tar.bz2",
+        },
+    }
+    exec(compile(ast.Module(body=functions, type_ignores=[]), "<generated>", "exec"), ns)
+    return ns
+
+
+def test_generated_extractor_preserves_hardlink_inode_identity(tmp_path):
+    import io
+    import os
+    import tarfile
+
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/first", "target": "/usr/lib/first", "kind": "file"},
+        {"source": "payload/usr/lib/second", "target": "/usr/lib/second",
+         "kind": "hardlink", "link_target": "usr/lib/first"},
+        {"source": "payload/usr/lib/third", "target": "/usr/lib/third",
+         "kind": "hardlink", "link_target": "usr/lib/second"},
+    ]}}
+    archive = tmp_path / "data.tar"
+    with tarfile.open(archive, "w") as tar:
+        for name, target in (("usr/lib/third", "usr/lib/second"),
+                             ("usr/lib/second", "usr/lib/first")):
+            entry = tarfile.TarInfo(name)
+            entry.type = tarfile.LNKTYPE
+            entry.linkname = target
+            tar.addfile(entry)
+        payload = b"test-data"
+        entry = tarfile.TarInfo("usr/lib/first")
+        entry.size = len(payload)
+        tar.addfile(entry, io.BytesIO(payload))
+    root = tmp_path / "payload"
+    root.mkdir()
+    _extractor_functions(plan)["_extract_selected"](archive, root)
+    paths = [root / "usr/lib" / name for name in ("first", "second", "third")]
+    assert all(path.read_bytes() == b"test-data" for path in paths)
+    assert len({os.stat(path).st_ino for path in paths}) == 1
+
+
+def test_generated_extractor_enforces_cumulative_limit(tmp_path):
+    import io
+    import tarfile
+
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/share/data", "target": "/usr/share/data", "kind": "file"},
+    ]}}
+    archive = tmp_path / "data.tar"
+    with tarfile.open(archive, "w") as tar:
+        entry = tarfile.TarInfo("usr/share/data")
+        entry.size = 4
+        tar.addfile(entry, io.BytesIO(b"data"))
+    ns = _extractor_functions(plan)
+    ns["_MAX_EXTRACTED_SIZE"] = 3
+    root = tmp_path / "payload"
+    root.mkdir()
+    with pytest.raises(RuntimeError, match="total extraction limit"):
+        ns["_extract_selected"](archive, root)
