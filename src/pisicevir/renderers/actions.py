@@ -191,6 +191,11 @@ def _extract_selected(archive_path, payload_root):
         if compressed is not None:
             compressed.close()
 
+    # Tar ordering is arbitrary: reject descendants even when the link appears
+    # after a selected child and was not yet known during extraction.
+    for selected_path in _SELECTED:
+        _ensure_no_link_parent(selected_path, link_paths)
+
     missing = sorted(_SELECTED - seen)
     if missing:
         raise RuntimeError("Selected payload paths are missing: %s" % ", ".join(missing))
