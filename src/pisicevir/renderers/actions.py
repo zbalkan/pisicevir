@@ -6,6 +6,7 @@ import posixpath
 _TEMPLATE = r'''#!/usr/bin/python3
 
 import os
+import posixpath
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -51,6 +52,15 @@ def _validate_link_target(member_path, raw_target):
             stack.pop()
         else:
             stack.append(part)
+
+
+def _normalise_hardlink_target(raw_target):
+    if raw_target.startswith("/") or "\\\\" in raw_target:
+        raise RuntimeError("Invalid hardlink target: %s" % raw_target)
+    normalized = posixpath.normpath(raw_target)
+    if normalized in ("", ".", "..") or normalized.startswith("../"):
+        raise RuntimeError("Invalid hardlink target: %s" % raw_target)
+    return normalized
 
 
 def _read_exact(stream, size, member_name):
@@ -160,7 +170,10 @@ def _extract_selected(archive_path, payload_root):
             if member.ischr() or member.isblk() or member.isfifo():
                 raise RuntimeError("Unsupported special payload entry: %s" % relative_path)
             if member.issym() or member.islnk():
-                _validate_link_target(relative_path, member.linkname)
+                if member.islnk():
+                    _normalise_hardlink_target(member.linkname)
+                else:
+                    _validate_link_target(relative_path, member.linkname)
                 link_paths.add(relative_path)
             if relative_path not in _SELECTED:
                 continue
@@ -211,7 +224,7 @@ def _extract_selected(archive_path, payload_root):
         next_pending = []
         progress = False
         for member, destination, relative_path in pending:
-            target_path = _normalise_path(member.linkname)
+            target_path = _normalise_hardlink_target(member.linkname)
             target = payload_root / target_path
             if not target.is_file() or target.is_symlink():
                 next_pending.append((member, destination, relative_path))
@@ -264,6 +277,14 @@ class ActionsRenderer:
     def render(self) -> str:
         operations = self._operations()
         lines: List[str] = []
+        source_targets = {
+            op["source"].removeprefix("payload/"): op["target"]
+            for op in operations
+        }
+        source_kinds = {
+            op["source"].removeprefix("payload/"): op["kind"]
+            for op in operations
+        }
         for item in self._ordered_for_install(operations):
             source = item["source"]
             target = item["target"]
@@ -274,10 +295,6 @@ class ActionsRenderer:
                 link_target = item.get("link_target")
                 if not isinstance(link_target, str) or not link_target:
                     raise ValueError(f"Symlink operation has no link_target: {source}")
-                source_targets = {
-                    op["source"].removeprefix("payload/"): op["target"]
-                    for op in operations
-                }
                 source_path = source.removeprefix("payload/")
                 resolved_source = posixpath.normpath(posixpath.join(
                     posixpath.dirname(source_path), link_target
@@ -305,11 +322,9 @@ class ActionsRenderer:
                 original = posixpath.normpath(link_target.removeprefix("./"))
                 if original.startswith("../") or original in ("..", ".") or original.startswith("/"):
                     raise ValueError(f"Invalid hardlink target: {source}")
-                source_targets = {
-                    op["source"].removeprefix("payload/"): op["target"]
-                    for op in operations
-                }
                 resolved = source_targets.get(original)
+                if source_kinds.get(original) == "symlink":
+                    raise ValueError(f"Hardlink to symlink inode is unsupported: {source}")
                 if not resolved:
                     raise ValueError(f"Hardlink target missing from plan: {source}")
                 lines.append(f"    _install_hardlink({resolved!r}, {target!r})")
