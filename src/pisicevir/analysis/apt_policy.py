@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Iterable
 
 _SYSTEMD_PATTERN = "*systemd*"
-_DEPENDENCY_LINE_RE = re.compile(r"^\s*(?:Pre)?Depends:\s*(?:<)?([^\s>|(]+)")
+_DEPENDENCY_LINE_RE = re.compile(r"^\s*\|?\s*(?:Pre)?Depends:\s*(?:<)?([^\s>|(]+)")
 
 
 @dataclass(frozen=True)
