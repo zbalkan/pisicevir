@@ -276,7 +276,12 @@ class ActionsRenderer:
                 if mapped_target is not None:
                     link_target = posixpath.relpath(mapped_target, posixpath.dirname(target))
                 elif item["operation"] == "relocate":
-                    raise ValueError(f"Relocated symlink target is not mapped: {source}")
+                    # Preserve the original absolute destination for external or
+                    # intentionally dangling targets when the link itself moves.
+                    original_absolute = "/" + resolved_source.lstrip("/")
+                    link_target = posixpath.relpath(
+                        original_absolute, posixpath.dirname(target)
+                    )
                 lines.append(f"    pisitools.dosym({link_target!r}, {target!r})")
             elif kind == "file":
                 parent, name = self._split_target(target)
