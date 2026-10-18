@@ -46,23 +46,38 @@ def first_blocked_systemd_dependency(
     installation command, so callers can show a policy-specific error instead of
     APT's generic dependency failure.
     """
-    # Alternatives form OR-groups; only an unavoidable blocked choice fails.
-    def check(package: str, path: tuple[str, ...]) -> tuple[str, ...] | None:
-        if is_systemd_related_package(package):
-            return path
-        if package in path[:-1]:
-            return None
-        for group in _apt_dependency_groups(package, runner=runner):
-            failures = [check(candidate, (*path, candidate)) for candidate in group]
-            if failures and all(failure is not None for failure in failures):
-                return failures[0]
-        return None
+    resolved: dict[str, tuple[str, ...] | None] = {}
+    active: set[str] = set()
 
-    failure = check(requested_package, (requested_package,))
-    return (
-        BlockedDependency(requested_package, failure[-1], failure)
-        if failure is not None else None
-    )
+    def check(package: str) -> tuple[str, ...] | None:
+        if is_systemd_related_package(package):
+            return (package,)
+        if package in resolved:
+            return resolved[package]
+        if package in active:
+            return None
+        active.add(package)
+        try:
+            for group in _apt_dependency_groups(package, runner=runner):
+                failure_path = None
+                for candidate in group:
+                    failure = check(candidate)
+                    if failure is None:
+                        break
+                    if failure_path is None:
+                        failure_path = failure
+                else:
+                    if failure_path is not None:
+                        result = (package, *failure_path)
+                        resolved[package] = result
+                        return result
+            resolved[package] = None
+            return None
+        finally:
+            active.remove(package)
+
+    failure = check(requested_package)
+    return BlockedDependency(requested_package, failure[-1], failure) if failure else None
 
 
 def _apt_dependencies(package: str, *, runner=subprocess.run) -> list[str]:
@@ -95,22 +110,14 @@ def _apt_dependency_groups(package: str, *, runner=subprocess.run) -> list[tuple
             continue
         candidate = match.group(1)
         if line.lstrip().startswith("|"):
-            if alternatives:
-                alternatives.append(candidate)
-            elif groups:
-                # Some apt-cache versions print a base candidate before
-                # alternatives; keep them in one OR group.
+            if not alternatives and groups:
                 alternatives = list(groups.pop())
-                alternatives.append(candidate)
-            else:
-                alternatives = [candidate]
+            alternatives.append(candidate)
         else:
             if alternatives:
-                alternatives.append(candidate)
                 groups.append(tuple(alternatives))
                 alternatives = []
-            else:
-                groups.append((candidate,))
+            groups.append((candidate,))
     if alternatives:
         groups.append(tuple(alternatives))
     return groups
