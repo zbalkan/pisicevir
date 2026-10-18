@@ -85,7 +85,12 @@ class RecipeGenerator:
         metadata_dir.mkdir(exist_ok=True)
 
         copied_source = source_dir / self.source_path.name
+        if self._hash_file(self.source_path, "sha256") != self.inspection["sha256"]:
+            raise ValueError("Source integrity mismatch: SHA-256 changed since inspection")
         shutil.copyfile(self.source_path, copied_source)
+        if self._hash_file(copied_source, "sha256") != self.inspection["sha256"]:
+            copied_source.unlink(missing_ok=True)
+            raise ValueError("Copied source integrity mismatch: SHA-256 changed")
         copied_source.chmod(0o644)
         epoch = int(os.environ.get("SOURCE_DATE_EPOCH", "0"))
         os.utime(copied_source, (epoch, epoch))
