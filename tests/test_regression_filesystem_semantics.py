@@ -81,3 +81,15 @@ def test_omitted_target_requires_review_for_symlink():
     # An unresolved link can be deliberate, but should not be silently changed.
     rendered = ActionsRenderer(plan).render()
     assert "pisitools.dosym('../lib/example', '/usr/bin/example')" in rendered
+
+
+def test_chained_hardlinks_install_in_dependency_order():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/z", "target": "/usr/lib/z", "kind": "file"},
+        {"source": "payload/usr/lib/b", "target": "/usr/lib/b", "kind": "hardlink", "link_target": "usr/lib/z"},
+        {"source": "payload/usr/lib/a", "target": "/usr/lib/a", "kind": "hardlink", "link_target": "usr/lib/b"},
+    ]}}
+    rendered = ActionsRenderer(plan).render()
+    assert rendered.index("_install_hardlink('/usr/lib/z', '/usr/lib/b')") < rendered.index(
+        "_install_hardlink('/usr/lib/b', '/usr/lib/a')"
+    )
