@@ -285,14 +285,16 @@ class ActionsRenderer:
                 link_target = item.get("link_target")
                 if not isinstance(link_target, str):
                     raise ValueError(f"Hardlink has no link target: {source}")
-                original = posixpath.normpath(posixpath.join(
-                    posixpath.dirname(source.removeprefix("payload/")), link_target
-                ))
+                # Debian tar hardlink names refer to archive-root paths.
+                # They are not resolved relative to the link's parent.
+                original = posixpath.normpath(link_target.removeprefix("./"))
+                if original.startswith("../") or original in ("..", ".") or original.startswith("/"):
+                    raise ValueError(f"Invalid hardlink target: {source}")
                 source_targets = {
                     op["source"].removeprefix("payload/"): op["target"]
                     for op in operations
                 }
-                resolved = source_targets.get(original) or source_targets.get(link_target)
+                resolved = source_targets.get(original)
                 if not resolved:
                     raise ValueError(f"Hardlink target missing from plan: {source}")
                 lines.append(f"    _install_hardlink({resolved!r}, {target!r})")
