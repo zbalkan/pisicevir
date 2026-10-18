@@ -11,7 +11,7 @@ def test_hardlink_install_uses_link_operation():
         {"source": "payload/usr/lib/second", "target": "/usr/lib/second", "kind": "hardlink", "link_target": "usr/lib/first"},
     ]}}
     content = ActionsRenderer(plan).render()
-    assert "os.link(" in content or "dohardlink(" in content
+    assert "_install_hardlink('/usr/lib/first', '/usr/lib/second')" in content
 
 
 def test_reject_symlink_with_descendant_target(tmp_path):
