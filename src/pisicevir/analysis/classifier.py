@@ -179,10 +179,10 @@ class Classifier:
                 "exit 0;",
                 ":",
             }
-            helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
+            helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
             conditional = (
-                r"if command -v (py3compile|py3clean) >/dev/null; then\\s+"
-                r"(" + helper + r");\\s*fi"
+                r"if command -v (py3compile|py3clean) >/dev/null; then\s+"
+                r"(" + helper + r");\s*fi"
             )
             index = 0
             while index < len(executable_lines):
