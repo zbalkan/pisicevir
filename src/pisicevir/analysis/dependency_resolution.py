@@ -13,7 +13,7 @@ def canonical_debian_package_name(group: DebianDependencyGroup) -> str | None:
     PISI dependency names cannot express Debian alternatives, version operators,
     architecture qualifiers, or architecture/build-profile restrictions directly.
     For automatic host-installed resolution, only unambiguous single-package
-    groups are considered and the Debian architecture qualifier is stripped.
+    groups are considered. :any and :native are suggestions only; the target\n    package name must still be reviewed before recipe generation.
     """
 
     if len(group.alternatives) != 1:
@@ -21,7 +21,7 @@ def canonical_debian_package_name(group: DebianDependencyGroup) -> str | None:
     alternative = group.alternatives[0]
     if alternative.architecture_restrictions or alternative.build_profiles:
         return None
-    if alternative.architecture_qualifier not in (None, "native"):
+    if alternative.architecture_qualifier not in (None, "native", "any"):
         return None
     return alternative.package
 
