@@ -104,15 +104,24 @@ def _apt_dependency_groups(package: str, *, runner=subprocess.run) -> list[tuple
         )
     groups: list[tuple[str, ...]] = []
     alternatives: list[str] = []
+    leading_pipe = False
     for line in result.stdout.splitlines():
         match = _DEPENDENCY_LINE_RE.match(line)
         if match is None:
             continue
         candidate = match.group(1)
         if line.lstrip().startswith("|"):
-            if not alternatives and groups:
-                alternatives = list(groups.pop())
+            if not alternatives:
+                if groups:
+                    alternatives = list(groups.pop())
+                else:
+                    leading_pipe = True
             alternatives.append(candidate)
+        elif alternatives and leading_pipe:
+            alternatives.append(candidate)
+            groups.append(tuple(alternatives))
+            alternatives = []
+            leading_pipe = False
         else:
             if alternatives:
                 groups.append(tuple(alternatives))
