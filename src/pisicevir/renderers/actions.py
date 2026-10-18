@@ -21,8 +21,8 @@ _MAX_MEMBER_SIZE = 2 * 1024 * 1024 * 1024
 _MAX_EXTRACTED_SIZE = 2 * 1024 * 1024 * 1024
 _ALLOWED_AR_MEMBERS = {{
     "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
-    "control.tar.zst", "control.tar.bz2", "data.tar", "data.tar.gz",
-    "data.tar.xz", "data.tar.zst", "data.tar.bz2",
+    "control.tar.zst", "control.tar.bz2", "control.tar.lzma", "data.tar", "data.tar.gz",
+    "data.tar.xz", "data.tar.zst", "data.tar.bz2", "data.tar.lzma",
 }}
 
 
