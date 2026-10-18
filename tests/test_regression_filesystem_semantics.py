@@ -35,3 +35,20 @@ def test_relocated_relative_symlink_target_is_rebased():
     ]}}
     content = ActionsRenderer(plan).render()
     assert "pisitools.dosym('../../lib/tool', '/opt/tools/bin/tool')" in content
+
+
+def test_hardlink_target_is_archive_root_relative():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/first", "target": "/opt/first", "kind": "file"},
+        {"source": "payload/usr/lib/second", "target": "/opt/second", "kind": "hardlink", "link_target": "./usr/lib/first"},
+    ]}}
+    rendered = ActionsRenderer(plan).render()
+    assert "_install_hardlink('/opt/first', '/opt/second')" in rendered
+
+
+def test_hardlink_target_escape_is_rejected():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/second", "target": "/opt/second", "kind": "hardlink", "link_target": "../../outside"},
+    ]}}
+    with pytest.raises(ValueError, match="Invalid hardlink target"):
+        ActionsRenderer(plan).render()
