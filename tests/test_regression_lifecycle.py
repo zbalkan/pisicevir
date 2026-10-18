@@ -27,3 +27,15 @@ def test_multiline_python_helper_guard_is_accepted():
 def test_multiline_guard_with_unrelated_command_is_rejected():
     scripts = {"postinst": "#!/bin/sh\nif command -v py3clean >/dev/null; then\npy3clean -p example\ninstall a /etc/a\nfi\n"}
     assert Classifier({"Package": "example"}, [], scripts).classify()["conversion_class"] == "E"
+
+
+def test_mismatched_guard_and_invoked_helper_is_rejected():
+    scripts = {
+        "postinst": (
+            "#!/bin/sh\n"
+            "set -e\n"
+            "if command -v py3clean >/dev/null; then py3compile -p example; fi\n"
+        )
+    }
+    result = Classifier({"Package": "example"}, [], scripts).classify()
+    assert result["conversion_class"] == "E"
