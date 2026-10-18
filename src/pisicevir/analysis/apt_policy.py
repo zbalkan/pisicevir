@@ -3,12 +3,11 @@ from __future__ import annotations
 import fnmatch
 import re
 import subprocess
-from collections import deque
 from dataclasses import dataclass
 from typing import Iterable
 
 _SYSTEMD_PATTERN = "*systemd*"
-_DEPENDENCY_LINE_RE = re.compile(r"^\s*(?:Pre)?Depends:\s*(?:<)?([^\s>|(]+)")
+_DEPENDENCY_LINE_RE = re.compile(r"^\s*\|?\s*(?:Pre)?Depends:\s*(?:<)?([^\s>|(]+)")
 
 
 @dataclass(frozen=True)
@@ -47,25 +46,38 @@ def first_blocked_systemd_dependency(
     installation command, so callers can show a policy-specific error instead of
     APT's generic dependency failure.
     """
-    queue: deque[tuple[str, tuple[str, ...]]] = deque(
-        [(requested_package, (requested_package,))]
-    )
-    visited: set[str] = set()
+    resolved: dict[str, tuple[str, ...] | None] = {}
+    active: set[str] = set()
 
-    while queue:
-        package, path = queue.popleft()
-        if package in visited:
-            continue
-        visited.add(package)
-
+    def check(package: str) -> tuple[str, ...] | None:
         if is_systemd_related_package(package):
-            return BlockedDependency(requested_package, package, path)
+            return (package,)
+        if package in resolved:
+            return resolved[package]
+        if package in active:
+            return None
+        active.add(package)
+        try:
+            for group in _apt_dependency_groups(package, runner=runner):
+                failure_path = None
+                for candidate in group:
+                    failure = check(candidate)
+                    if failure is None:
+                        break
+                    if failure_path is None:
+                        failure_path = failure
+                else:
+                    if failure_path is not None:
+                        result = (package, *failure_path)
+                        resolved[package] = result
+                        return result
+            resolved[package] = None
+            return None
+        finally:
+            active.remove(package)
 
-        for dependency in _apt_dependencies(package, runner=runner):
-            if dependency not in visited:
-                queue.append((dependency, (*path, dependency)))
-
-    return None
+    failure = check(requested_package)
+    return BlockedDependency(requested_package, failure[-1], failure) if failure else None
 
 
 def _apt_dependencies(package: str, *, runner=subprocess.run) -> list[str]:
@@ -79,6 +91,45 @@ def _apt_dependencies(package: str, *, runner=subprocess.run) -> list[str]:
         stderr = (result.stderr or "").strip()
         raise AptPolicyError(f"Unable to resolve dependencies for {package}: {stderr}")
     return list(_parse_apt_cache_depends(result.stdout.splitlines()))
+
+
+def _apt_dependency_groups(package: str, *, runner=subprocess.run) -> list[tuple[str, ...]]:
+    result = runner(
+        ["apt-cache", "depends", "--no-recommends", "--no-suggests", package],
+        check=False, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise AptPolicyError(
+            f"Unable to resolve dependencies for {package}: {(result.stderr or '').strip()}"
+        )
+    groups: list[tuple[str, ...]] = []
+    alternatives: list[str] = []
+    leading_pipe = False
+    for line in result.stdout.splitlines():
+        match = _DEPENDENCY_LINE_RE.match(line)
+        if match is None:
+            continue
+        candidate = match.group(1)
+        if line.lstrip().startswith("|"):
+            if not alternatives:
+                if groups:
+                    alternatives = list(groups.pop())
+                else:
+                    leading_pipe = True
+            alternatives.append(candidate)
+        elif alternatives and leading_pipe:
+            alternatives.append(candidate)
+            groups.append(tuple(alternatives))
+            alternatives = []
+            leading_pipe = False
+        else:
+            if alternatives:
+                groups.append(tuple(alternatives))
+                alternatives = []
+            groups.append((candidate,))
+    if alternatives:
+        groups.append(tuple(alternatives))
+    return groups
 
 
 def _parse_apt_cache_depends(lines: Iterable[str]) -> Iterable[str]:
