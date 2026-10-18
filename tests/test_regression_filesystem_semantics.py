@@ -125,3 +125,26 @@ def test_hardlink_normalization_agrees_with_generated_extractor():
     output = ActionsRenderer(plan).render()
     assert "_install_hardlink('/usr/share/foo', '/usr/lib/alias')" in output
     assert 'target_path = _normalise_hardlink_target(member.linkname)' in output
+
+
+def test_backslash_hardlink_target_matches_archive_root_path():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/first", "target": "/usr/lib/first", "kind": "file"},
+        {"source": "payload/usr/lib/second", "target": "/usr/lib/second",
+         "kind": "hardlink", "link_target": r"usr\lib\first"},
+    ]}}
+    output = ActionsRenderer(plan).render()
+    assert "_install_hardlink('/usr/lib/first', '/usr/lib/second')" in output
+    namespace = {"__name__": "generated_actions"}
+    import ast
+    import types
+    # Execute the standalone generated normalization helper, without importing PISI.
+    tree = ast.parse(output)
+    helper = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_normalise_hardlink_target"
+    )
+    import posixpath
+    exec(compile(ast.Module(body=[helper], type_ignores=[]), "<helper>", "exec"),
+         {"posixpath": posixpath}, namespace)
+    assert namespace["_normalise_hardlink_target"](r"usr\lib\first") == "usr/lib/first"
