@@ -176,8 +176,8 @@ def _extractor_functions(plan):
         "_MAX_EXTRACTED_SIZE": 2 * 1024 * 1024 * 1024,
         "_ALLOWED_AR_MEMBERS": {
             "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
-            "control.tar.zst", "control.tar.bz2", "data.tar", "data.tar.gz",
-            "data.tar.xz", "data.tar.zst", "data.tar.bz2",
+            "control.tar.zst", "control.tar.bz2", "control.tar.lzma", "data.tar", "data.tar.gz",
+            "data.tar.xz", "data.tar.zst", "data.tar.bz2", "data.tar.lzma",
         },
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), "<generated>", "exec"), ns)
@@ -258,3 +258,30 @@ def test_ar_rejects_unsafe_member_name_before_writing(tmp_path):
     archive.write_bytes(b"!<arch>\n" + header)
     with pytest.raises(RuntimeError, match="Unsupported ar member name"):
         ns["_read_ar_data_member"](archive, tmp_path)
+
+
+@pytest.mark.parametrize("member_name", ["control.tar.lzma", "data.tar.lzma"])
+def test_generated_ar_reader_accepts_lzma_member_names(tmp_path, member_name):
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/share/data", "target": "/usr/share/data", "kind": "file"}
+    ]}}
+    ns = _extractor_functions(plan)
+    members = [("debian-binary", b"2.0\n"),
+               ("control.tar.lzma", b"control"),
+               ("data.tar.lzma", b"data")]
+    archive = tmp_path / "lzma.deb"
+    with archive.open("wb") as stream:
+        stream.write(b"!<arch>\n")
+        for name, data in members:
+            header = (name.ljust(16).encode("ascii") + b"0".ljust(12)
+                      + b"0".ljust(6) + b"0".ljust(6) + b"0".ljust(8)
+                      + str(len(data)).encode("ascii").ljust(10)
+                      + bytes((96, 10)))
+            assert len(header) == 60
+            stream.write(header)
+            stream.write(data)
+            if len(data) % 2:
+                stream.write(b"\n")
+    extracted = ns["_read_ar_data_member"](archive, tmp_path)
+    assert extracted.name == "data.tar.lzma"
+    assert extracted.read_bytes() == b"data"
