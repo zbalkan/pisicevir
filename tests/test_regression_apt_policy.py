@@ -37,3 +37,18 @@ def test_all_systemd_alternatives_are_blocked():
         )
 
     assert first_blocked_systemd_dependency("example", runner=runner) is not None
+
+
+def test_alternative_group_is_independent_of_line_order():
+    from pisicevir.analysis.apt_policy import _apt_dependency_groups
+    responses = {
+        "example": "  Depends: safe-helper\n |Depends: systemd-helper\n",
+        "safe-helper": "",
+        "systemd-helper": "",
+    }
+    def runner(args, **kwargs):
+        return CompletedProcess(args, 0, responses[args[-1]], "")
+    assert _apt_dependency_groups("example", runner=runner) == [
+        ("safe-helper", "systemd-helper")
+    ]
+    assert first_blocked_systemd_dependency("example", runner=runner) is None
