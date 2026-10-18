@@ -2,9 +2,6 @@ name: Unit tests
 
 on:
   push:
-    branches:
-      - main
-      - master
   pull_request:
   workflow_dispatch:
 
@@ -17,6 +14,8 @@ concurrency:
 
 jobs:
   test:
+    # Same-repository PRs are tested by their push event; fork PRs have no base-repo push.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     name: Python ${{ matrix.python-version }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -73,3 +72,15 @@ jobs:
 
       - name: Run unit tests
         run: python -m pytest -ra
+
+      - name: Check model formatting with Ruff
+        if: matrix.python-version == '3.12'
+        run: python -m ruff format --check src/pisicevir/models
+
+      - name: Lint models with Ruff
+        if: matrix.python-version == '3.12'
+        run: python -m ruff check src/pisicevir/models
+
+      - name: Type-check models with mypy
+        if: matrix.python-version == '3.12'
+        run: python -m mypy

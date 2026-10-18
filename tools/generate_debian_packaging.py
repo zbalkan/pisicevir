@@ -21,7 +21,7 @@ Build-Depends:
  python3-pytest,
  python3-pytestqt,
  python3-yaml,
- python3-pydantic,
+ python3-pydantic (>= 2.7),
  python3-zstandard,
  python3-pyqt5,
  binutils
@@ -36,7 +36,7 @@ Depends:
  ${{python3:Depends}},
  binutils,
  python3-yaml,
- python3-pydantic,
+ python3-pydantic (>= 2.7),
  python3-zstandard
 Description: external package importer and PISI recipe generator
  Pisicevir inspects external package artifacts, classifies conversion risk,
