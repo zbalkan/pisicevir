@@ -167,9 +167,6 @@ class Classifier:
             lowered = body.lower()
             if any(token in lowered for token in _UNSAFE_LIFECYCLE_TOKENS):
                 return False
-            if "py3compile" in lowered or "py3clean" in lowered:
-                saw_python_helper = True
-                continue
             executable_lines = [
                 line.strip()
                 for line in body.splitlines()
@@ -182,7 +179,34 @@ class Classifier:
                 "exit 0;",
                 ":",
             }
-            if any(line not in harmless for line in executable_lines):
+            helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
+            conditional = (
+                r"if command -v (py3compile|py3clean) >/dev/null; then\s+"
+                r"(" + helper + r");\s*fi"
+            )
+            index = 0
+            while index < len(executable_lines):
+                line = executable_lines[index]
+                if line in harmless:
+                    index += 1
+                    continue
+                if re.fullmatch(helper, line):
+                    saw_python_helper = True
+                    index += 1
+                    continue
+                # Only recognize a fixed helper-only conditional, including
+                # its multiline spelling. Arbitrary shell is never whitelisted.
+                candidate = " ".join(executable_lines[index:index + 2]) + "; " + (executable_lines[index + 2] if index + 2 < len(executable_lines) else "")
+                matched = re.fullmatch(conditional, candidate)
+                if matched and matched.group(1) in matched.group(2):
+                    saw_python_helper = True
+                    index += 3
+                    continue
+                matched = re.fullmatch(conditional, line)
+                if matched and matched.group(1) in matched.group(2):
+                    saw_python_helper = True
+                    index += 1
+                    continue
                 return False
         return saw_python_helper
 
