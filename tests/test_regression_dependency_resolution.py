@@ -21,3 +21,18 @@ def test_installed_satisfying_version_is_mapped():
             run.side_effect = [__import__("subprocess").CompletedProcess([], 0, "3.12.1", ""), __import__("subprocess").CompletedProcess([], 0, "", "")]
             result = installed_dependency_mappings({"Depends": [group]})
     assert result == {"python3 (>= 3.12)": "python3"}
+
+
+def test_unsatisfied_strict_version_constraint_is_not_mapped():
+    import subprocess
+    group = parse_dependency_expression("python3 (>> 3.12)")[0].model_dump()
+    with patch("pisicevir.analysis.dependency_resolution.is_debian_package_installed", return_value=True):
+        with patch("subprocess.run") as run:
+            run.side_effect = [
+                subprocess.CompletedProcess([], 0, "3.12", ""),
+                subprocess.CompletedProcess([], 1, "", ""),
+            ]
+            assert installed_dependency_mappings({"Pre-Depends": [group]}) == {}
+            assert run.call_args_list[-1].args[0] == [
+                "dpkg", "--compare-versions", "3.12", ">>", "3.12"
+            ]
