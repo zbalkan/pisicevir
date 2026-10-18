@@ -200,18 +200,28 @@ def _extract_selected(archive_path, payload_root):
     if missing:
         raise RuntimeError("Selected payload paths are missing: %s" % ", ".join(missing))
 
+    # Materialize symlinks first; resolve chained hardlinks irrespective of tar order.
+    pending = []
     for member, destination, relative_path in deferred_links:
         if member.issym():
             destination.symlink_to(member.linkname)
         else:
+            pending.append((member, destination, relative_path))
+    while pending:
+        next_pending = []
+        progress = False
+        for member, destination, relative_path in pending:
             target_path = _normalise_path(member.linkname)
             target = payload_root / target_path
-            if not target.is_file():
-                raise RuntimeError(
-                    "Hard-link target is missing for %s: %s"
-                    % (relative_path, target_path)
-                )
+            if not target.is_file() or target.is_symlink():
+                next_pending.append((member, destination, relative_path))
+                continue
             os.link(target, destination)
+            progress = True
+        if not progress:
+            raise RuntimeError("Missing or cyclic hardlink targets: %s" %
+                               ", ".join(item[2] for item in next_pending))
+        pending = next_pending
 
 
 def setup():
@@ -345,7 +355,7 @@ class ActionsRenderer:
     @staticmethod
     def _ordered_for_install(operations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         kind_order = {"directory": 0, "file": 1, "hardlink": 2, "symlink": 3}
-        return sorted(
+        ordered = sorted(
             operations,
             key=lambda item: (
                 kind_order.get(item["kind"], 99),
@@ -353,6 +363,37 @@ class ActionsRenderer:
                 item["target"],
             ),
         )
+        by_source = {
+            item["source"].removeprefix("payload/"): item
+            for item in ordered
+        }
+        emitted: set[str] = set()
+        visiting: set[str] = set()
+        result: List[Dict[str, Any]] = []
+
+        def visit(item: Dict[str, Any]) -> None:
+            key = item["source"]
+            if key in emitted:
+                return
+            if key in visiting:
+                raise ValueError(f"Cyclic hardlink dependencies: {key}")
+            visiting.add(key)
+            if item["kind"] == "hardlink":
+                target = item.get("link_target")
+                if not isinstance(target, str):
+                    raise ValueError(f"Hardlink missing target: {key}")
+                normalized = posixpath.normpath(target.removeprefix("./"))
+                dependency = by_source.get(normalized)
+                if dependency is None:
+                    raise ValueError(f"Hardlink target missing from plan: {key}")
+                visit(dependency)
+            visiting.remove(key)
+            emitted.add(key)
+            result.append(item)
+
+        for item in ordered:
+            visit(item)
+        return result
 
     @staticmethod
     def _split_target(target: str) -> tuple[str, str]:
