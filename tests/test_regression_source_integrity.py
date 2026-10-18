@@ -27,3 +27,12 @@ def test_generator_rejects_source_modified_after_inspection(tmp_path):
     generator = RecipeGenerator(str(source), inspection, plan, str(tmp_path / "recipe"))
     with pytest.raises(ValueError, match="hash|digest|SHA|changed|integrity|match"):
         generator.generate()
+
+
+def test_generated_hashes_are_derived_from_verified_copy():
+    import inspect
+    from pisicevir.renderers.generator import RecipeGenerator
+    source = inspect.getsource(RecipeGenerator._create_recipe_model)
+    provenance = inspect.getsource(RecipeGenerator.generate)
+    assert 'self._hash_file(copied_source, "sha1")' in source
+    assert '"source_sha1": self._hash_file(copied_source, "sha1")' in provenance
