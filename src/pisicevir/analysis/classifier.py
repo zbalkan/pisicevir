@@ -196,7 +196,7 @@ class Classifier:
                     continue
                 # Only recognize a fixed helper-only conditional, including
                 # its multiline spelling. Arbitrary shell is never whitelisted.
-                candidate = " ".join(executable_lines[index:index + 3])
+                candidate = " ".join(executable_lines[index:index + 2]) + "; " + (executable_lines[index + 2] if index + 2 < len(executable_lines) else "")
                 matched = re.fullmatch(conditional, candidate)
                 if matched and matched.group(1) in matched.group(2):
                     saw_python_helper = True
