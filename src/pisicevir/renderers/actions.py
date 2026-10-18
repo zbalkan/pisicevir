@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import posixpath
 
 _TEMPLATE = r'''#!/usr/bin/python3
 
 import os
+import posixpath
 import shutil
 import tarfile
 from pathlib import Path, PurePosixPath
@@ -16,6 +18,12 @@ from pisi.actionsapi import get, pisitools
 _OPERATIONS = {operations!r}
 _SELECTED = {{item["source"].removeprefix("payload/") for item in _OPERATIONS}}
 _MAX_MEMBER_SIZE = 2 * 1024 * 1024 * 1024
+_MAX_EXTRACTED_SIZE = 2 * 1024 * 1024 * 1024
+_ALLOWED_AR_MEMBERS = {{
+    "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
+    "control.tar.zst", "control.tar.bz2", "control.tar.lzma", "data.tar", "data.tar.gz",
+    "data.tar.xz", "data.tar.zst", "data.tar.bz2", "data.tar.lzma",
+}}
 
 
 def _normalise_path(raw_path):
@@ -52,6 +60,15 @@ def _validate_link_target(member_path, raw_target):
             stack.append(part)
 
 
+def _normalise_hardlink_target(raw_target):
+    raw_target = raw_target.replace("\\", "/")
+    if raw_target.startswith("/"):
+        raise RuntimeError("Invalid hardlink target: %s" % raw_target)
+    normalized = posixpath.normpath(raw_target)
+    if normalized in ("", ".", "..") or normalized.startswith("../"):
+        raise RuntimeError("Invalid hardlink target: %s" % raw_target)
+    return normalized
+
 def _read_exact(stream, size, member_name):
     chunks = []
     remaining = size
@@ -78,7 +95,7 @@ def _read_ar_data_member(package_path, destination_dir):
             name = header[0:16].decode("ascii", errors="strict").strip()
             if name.endswith("/"):
                 name = name[:-1]
-            if not name or name.startswith("/"):
+            if name not in _ALLOWED_AR_MEMBERS:
                 raise RuntimeError("Unsupported ar member name: %r" % name)
             try:
                 size = int(header[48:58].decode("ascii").strip())
@@ -147,6 +164,7 @@ def _extract_selected(archive_path, payload_root):
     seen = set()
     link_paths = set()
     deferred_links = []
+    extracted_size = 0
     archive, reader, compressed = _open_payload_archive(archive_path)
     try:
         for member in archive:
@@ -159,7 +177,10 @@ def _extract_selected(archive_path, payload_root):
             if member.ischr() or member.isblk() or member.isfifo():
                 raise RuntimeError("Unsupported special payload entry: %s" % relative_path)
             if member.issym() or member.islnk():
-                _validate_link_target(relative_path, member.linkname)
+                if member.islnk():
+                    _normalise_hardlink_target(member.linkname)
+                else:
+                    _validate_link_target(relative_path, member.linkname)
                 link_paths.add(relative_path)
             if relative_path not in _SELECTED:
                 continue
@@ -172,6 +193,11 @@ def _extract_selected(archive_path, payload_root):
                 destination.mkdir(parents=True, exist_ok=True)
                 destination.chmod(member.mode & 0o7777)
             elif member.isfile():
+                if member.size < 0 or member.size > _MAX_MEMBER_SIZE:
+                    raise RuntimeError("Payload member exceeds extraction limit: %s" % relative_path)
+                extracted_size += member.size
+                if extracted_size > _MAX_EXTRACTED_SIZE:
+                    raise RuntimeError("Debian payload exceeds total extraction limit")
                 source = archive.extractfile(member)
                 if source is None:
                     raise RuntimeError("Unable to read payload file: %s" % relative_path)
@@ -190,22 +216,37 @@ def _extract_selected(archive_path, payload_root):
         if compressed is not None:
             compressed.close()
 
+    # Tar ordering is arbitrary: reject descendants even when the link appears
+    # after a selected child and was not yet known during extraction.
+    for selected_path in _SELECTED:
+        _ensure_no_link_parent(selected_path, link_paths)
+
     missing = sorted(_SELECTED - seen)
     if missing:
         raise RuntimeError("Selected payload paths are missing: %s" % ", ".join(missing))
 
+    # Materialize symlinks first; resolve chained hardlinks irrespective of tar order.
+    pending = []
     for member, destination, relative_path in deferred_links:
         if member.issym():
             destination.symlink_to(member.linkname)
         else:
-            target_path = _normalise_path(member.linkname)
+            pending.append((member, destination, relative_path))
+    while pending:
+        next_pending = []
+        progress = False
+        for member, destination, relative_path in pending:
+            target_path = _normalise_hardlink_target(member.linkname)
             target = payload_root / target_path
-            if not target.is_file():
-                raise RuntimeError(
-                    "Hard-link target is missing for %s: %s"
-                    % (relative_path, target_path)
-                )
+            if not target.is_file() or target.is_symlink():
+                next_pending.append((member, destination, relative_path))
+                continue
             os.link(target, destination)
+            progress = True
+        if not progress:
+            raise RuntimeError("Missing or cyclic hardlink targets: %s" %
+                               ", ".join(item[2] for item in next_pending))
+        pending = next_pending
 
 
 def setup():
@@ -225,6 +266,16 @@ def setup():
     _extract_selected(archive_path, payload_root)
 
 
+def _install_hardlink(existing, destination):
+    root = Path(get.installDIR())
+    source_path = root / existing.lstrip("/")
+    target_path = root / destination.lstrip("/")
+    if not source_path.is_file() or source_path.is_symlink():
+        raise RuntimeError("Hardlink source not installed: %s" % existing)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    os.link(source_path, target_path)
+
+
 def install():
     os.chdir(get.workDIR())
 {install_lines}
@@ -238,6 +289,14 @@ class ActionsRenderer:
     def render(self) -> str:
         operations = self._operations()
         lines: List[str] = []
+        source_targets = {
+            op["source"].removeprefix("payload/"): op["target"]
+            for op in operations
+        }
+        source_kinds = {
+            op["source"].removeprefix("payload/"): op["kind"]
+            for op in operations
+        }
         for item in self._ordered_for_install(operations):
             source = item["source"]
             target = item["target"]
@@ -248,12 +307,39 @@ class ActionsRenderer:
                 link_target = item.get("link_target")
                 if not isinstance(link_target, str) or not link_target:
                     raise ValueError(f"Symlink operation has no link_target: {source}")
+                source_path = source.removeprefix("payload/")
+                resolved_source = posixpath.normpath(posixpath.join(
+                    posixpath.dirname(source_path), link_target
+                ))
+                mapped_target = source_targets.get(resolved_source)
+                if mapped_target is not None:
+                    link_target = posixpath.relpath(mapped_target, posixpath.dirname(target))
+                elif item["operation"] == "relocate":
+                    # Preserve the original absolute destination for external or
+                    # intentionally dangling targets when the link itself moves.
+                    original_absolute = "/" + resolved_source.lstrip("/")
+                    link_target = posixpath.relpath(
+                        original_absolute, posixpath.dirname(target)
+                    )
                 lines.append(f"    pisitools.dosym({link_target!r}, {target!r})")
-            elif kind in {"file", "hardlink"}:
+            elif kind == "file":
                 parent, name = self._split_target(target)
-                lines.append(
-                    f"    pisitools.insinto({parent!r}, {source!r}, {name!r})"
-                )
+                lines.append(f"    pisitools.insinto({parent!r}, {source!r}, {name!r})")
+            elif kind == "hardlink":
+                link_target = item.get("link_target")
+                if not isinstance(link_target, str):
+                    raise ValueError(f"Hardlink has no link target: {source}")
+                # Debian tar hardlink names refer to archive-root paths.
+                # They are not resolved relative to the link's parent.
+                original = posixpath.normpath(link_target.replace("\\", "/").removeprefix("./"))
+                if original.startswith("../") or original in ("..", ".") or original.startswith("/"):
+                    raise ValueError(f"Invalid hardlink target: {source}")
+                resolved = source_targets.get(original)
+                if source_kinds.get(original) == "symlink":
+                    raise ValueError(f"Hardlink to symlink inode is unsupported: {source}")
+                if not resolved:
+                    raise ValueError(f"Hardlink target missing from plan: {source}")
+                lines.append(f"    _install_hardlink({resolved!r}, {target!r})")
             else:
                 raise ValueError(f"Unsupported payload kind: {kind}")
 
@@ -296,7 +382,7 @@ class ActionsRenderer:
     @staticmethod
     def _ordered_for_install(operations: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         kind_order = {"directory": 0, "file": 1, "hardlink": 2, "symlink": 3}
-        return sorted(
+        ordered = sorted(
             operations,
             key=lambda item: (
                 kind_order.get(item["kind"], 99),
@@ -304,6 +390,39 @@ class ActionsRenderer:
                 item["target"],
             ),
         )
+        by_source = {
+            item["source"].removeprefix("payload/"): item
+            for item in ordered
+        }
+        emitted: set[str] = set()
+        visiting: set[str] = set()
+        result: List[Dict[str, Any]] = []
+
+        def visit(item: Dict[str, Any]) -> None:
+            key = item["source"]
+            if key in emitted:
+                return
+            if key in visiting:
+                raise ValueError(f"Cyclic hardlink dependencies: {key}")
+            visiting.add(key)
+            if item["kind"] == "hardlink":
+                target = item.get("link_target")
+                if not isinstance(target, str):
+                    raise ValueError(f"Hardlink missing target: {key}")
+                normalized = posixpath.normpath(target.replace("\\", "/").removeprefix("./"))
+                if normalized.startswith("../") or normalized in ("..", ".") or normalized.startswith("/"):
+                    raise ValueError(f"Invalid hardlink target: {key}")
+                dependency = by_source.get(normalized)
+                if dependency is None:
+                    raise ValueError(f"Hardlink target missing from plan: {key}")
+                visit(dependency)
+            visiting.remove(key)
+            emitted.add(key)
+            result.append(item)
+
+        for item in ordered:
+            visit(item)
+        return result
 
     @staticmethod
     def _split_target(target: str) -> tuple[str, str]:
