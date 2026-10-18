@@ -234,3 +234,27 @@ def test_generated_extractor_enforces_cumulative_limit(tmp_path):
     root.mkdir()
     with pytest.raises(RuntimeError, match="total extraction limit"):
         ns["_extract_selected"](archive, root)
+
+
+def test_ar_rejects_unsafe_member_name_before_writing(tmp_path):
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/share/data", "target": "/usr/share/data", "kind": "file"}
+    ]}}
+    ns = _extractor_functions(plan)
+    # ar uses a 16-byte name field, followed by metadata and a two-byte trailer.
+    name = "data.tar/../evil"
+    assert len(name) <= 16
+    header = (
+        name.ljust(16).encode("ascii")
+        + b"0".ljust(12)
+        + b"0".ljust(6)
+        + b"0".ljust(6)
+        + b"0".ljust(8)
+        + b"0".ljust(10)
+        + bytes((96, 10))
+    )
+    assert len(header) == 60
+    archive = tmp_path / "invalid.deb"
+    archive.write_bytes(b"!<arch>\n" + header)
+    with pytest.raises(RuntimeError, match="Unsupported ar member name"):
+        ns["_read_ar_data_member"](archive, tmp_path)
