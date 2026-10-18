@@ -58,14 +58,31 @@ def installed_dependency_mappings(
                 continue
             alternative = model.alternatives[0]
             if alternative.operator is not None:
-                version_result = subprocess.run(
-                    ["dpkg-query", "-W", "-f=${Version}", package],
+                if not alternative.version:
+                    continue
+                architecture_result = subprocess.run(
+                    ["dpkg", "--print-architecture"],
                     capture_output=True, text=True, check=False,
                 )
-                if version_result.returncode != 0 or not version_result.stdout.strip():
+                if architecture_result.returncode != 0:
+                    continue
+                native_arch = architecture_result.stdout.strip()
+                version_result = subprocess.run(
+                    ["dpkg-query", "-W",
+                     "-f=${Architecture}\\t${db:Status-Abbrev}\\t${Version}\\n", package],
+                    capture_output=True, text=True, check=False,
+                )
+                if version_result.returncode != 0:
+                    continue
+                versions = [
+                    parts[2] for line in version_result.stdout.splitlines()
+                    if len(parts := line.split("\\t")) == 3
+                    and parts[0] == native_arch and parts[1].startswith("ii ")
+                ]
+                if len(versions) != 1 or not versions[0]:
                     continue
                 comparison = subprocess.run(
-                    ["dpkg", "--compare-versions", version_result.stdout.strip(),
+                    ["dpkg", "--compare-versions", versions[0],
                      alternative.operator, alternative.version],
                     capture_output=True, text=True, check=False,
                 )
