@@ -20,7 +20,7 @@ def test_regular_dependencies_still_parse():
 
 def test_non_systemd_alternative_is_permitted():
     responses = {
-        "example": " |Depends: systemd-helper\n  Depends: safe-helper\n",
+        "example": "  Depends: systemd-helper\n |Depends: safe-helper\n",
         "safe-helper": "",
     }
 
