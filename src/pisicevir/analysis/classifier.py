@@ -167,9 +167,6 @@ class Classifier:
             lowered = body.lower()
             if any(token in lowered for token in _UNSAFE_LIFECYCLE_TOKENS):
                 return False
-            if "py3compile" in lowered or "py3clean" in lowered:
-                saw_python_helper = True
-                continue
             executable_lines = [
                 line.strip()
                 for line in body.splitlines()
@@ -182,7 +179,12 @@ class Classifier:
                 "exit 0;",
                 ":",
             }
-            if any(line not in harmless for line in executable_lines):
+            for line in executable_lines:
+                if line in harmless:
+                    continue
+                if re.fullmatch(r"(?:/usr/bin/)?py3(?:compile|clean)(?:\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*", line):
+                    saw_python_helper = True
+                    continue
                 return False
         return saw_python_helper
 
