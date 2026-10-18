@@ -69,14 +69,14 @@ def installed_dependency_mappings(
                 native_arch = architecture_result.stdout.strip()
                 version_result = subprocess.run(
                     ["dpkg-query", "-W",
-                     "-f=${Architecture}\\t${db:Status-Abbrev}\\t${Version}\\n", package],
+                     "-f=${Architecture}\t${db:Status-Abbrev}\t${Version}\n", package],
                     capture_output=True, text=True, check=False,
                 )
                 if version_result.returncode != 0:
                     continue
                 versions = [
                     parts[2] for line in version_result.stdout.splitlines()
-                    if len(parts := line.split("\\t")) == 3
+                    if len(parts := line.split("\t")) == 3
                     and parts[0] == native_arch and parts[1].startswith("ii ")
                 ]
                 if len(versions) != 1 or not versions[0]:
