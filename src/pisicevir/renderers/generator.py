@@ -113,7 +113,7 @@ class RecipeGenerator:
         )
         provenance = {
             "source_file": self.source_path.name,
-            "source_sha1": self._hash_file(self.source_path, "sha1"),
+            "source_sha1": self._hash_file(copied_source, "sha1"),
             "source_sha256": self.inspection["sha256"],
             "source_dependencies": self._expected_dependency_groups(),
             "mapped_runtime_dependencies": self._mapped_runtime_dependencies(),
@@ -317,7 +317,7 @@ class RecipeGenerator:
             name=packager_data["name"], email=packager_data["email"]
         )
 
-        source_sha1 = self._hash_file(self.source_path, "sha1")
+        source_sha1 = self._hash_file(copied_source, "sha1")
         source = PisiSource(
             name=package_name,
             homepage=self.plan["homepage"],
