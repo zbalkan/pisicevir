@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Dict, List
+import posixpath
 
 _TEMPLATE = r'''#!/usr/bin/python3
 
@@ -225,6 +226,16 @@ def setup():
     _extract_selected(archive_path, payload_root)
 
 
+def _install_hardlink(existing, destination):
+    root = Path(get.installDIR())
+    source_path = root / existing.lstrip("/")
+    target_path = root / destination.lstrip("/")
+    if not source_path.is_file() or source_path.is_symlink():
+        raise RuntimeError("Hardlink source not installed: %s" % existing)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    os.link(source_path, target_path)
+
+
 def install():
     os.chdir(get.workDIR())
 {install_lines}
@@ -248,12 +259,38 @@ class ActionsRenderer:
                 link_target = item.get("link_target")
                 if not isinstance(link_target, str) or not link_target:
                     raise ValueError(f"Symlink operation has no link_target: {source}")
+                source_targets = {
+                    op["source"].removeprefix("payload/"): op["target"]
+                    for op in operations
+                }
+                source_path = source.removeprefix("payload/")
+                resolved_source = posixpath.normpath(posixpath.join(
+                    posixpath.dirname(source_path), link_target
+                ))
+                mapped_target = source_targets.get(resolved_source)
+                if mapped_target is not None:
+                    link_target = posixpath.relpath(mapped_target, posixpath.dirname(target))
+                elif item["operation"] == "relocate":
+                    raise ValueError(f"Relocated symlink target is not mapped: {source}")
                 lines.append(f"    pisitools.dosym({link_target!r}, {target!r})")
-            elif kind in {"file", "hardlink"}:
+            elif kind == "file":
                 parent, name = self._split_target(target)
-                lines.append(
-                    f"    pisitools.insinto({parent!r}, {source!r}, {name!r})"
-                )
+                lines.append(f"    pisitools.insinto({parent!r}, {source!r}, {name!r})")
+            elif kind == "hardlink":
+                link_target = item.get("link_target")
+                if not isinstance(link_target, str):
+                    raise ValueError(f"Hardlink has no link target: {source}")
+                original = posixpath.normpath(posixpath.join(
+                    posixpath.dirname(source.removeprefix("payload/")), link_target
+                ))
+                source_targets = {
+                    op["source"].removeprefix("payload/"): op["target"]
+                    for op in operations
+                }
+                resolved = source_targets.get(original) or source_targets.get(link_target)
+                if not resolved:
+                    raise ValueError(f"Hardlink target missing from plan: {source}")
+                lines.append(f"    _install_hardlink({resolved!r}, {target!r})")
             else:
                 raise ValueError(f"Unsupported payload kind: {kind}")
 
