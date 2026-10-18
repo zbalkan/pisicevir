@@ -93,3 +93,35 @@ def test_chained_hardlinks_install_in_dependency_order():
     assert rendered.index("_install_hardlink('/usr/lib/z', '/usr/lib/b')") < rendered.index(
         "_install_hardlink('/usr/lib/b', '/usr/lib/a')"
     )
+
+
+def test_double_slash_target_is_rejected(tmp_path):
+    inspection = {"payload": [{"path": "usr/share/item", "kind": "file"}]}
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/share/item", "target": "//opt/item", "kind": "file"}
+    ]}}
+    generator = RecipeGenerator("source.deb", inspection, plan, str(tmp_path))
+    with pytest.raises(ValueError, match="Invalid or non-normalized"):
+        generator._validate_payload_decisions()
+
+
+def test_hardlink_to_symlink_is_rejected_during_rendering():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/lib/link", "target": "/usr/lib/link",
+         "kind": "symlink", "link_target": "real"},
+        {"source": "payload/usr/lib/alias", "target": "/usr/lib/alias",
+         "kind": "hardlink", "link_target": "usr/lib/link"},
+    ]}}
+    with pytest.raises(ValueError, match="Hardlink to symlink inode is unsupported"):
+        ActionsRenderer(plan).render()
+
+
+def test_hardlink_normalization_agrees_with_generated_extractor():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/share/foo", "target": "/usr/share/foo", "kind": "file"},
+        {"source": "payload/usr/lib/alias", "target": "/usr/lib/alias",
+         "kind": "hardlink", "link_target": "usr/lib/../share/foo"},
+    ]}}
+    output = ActionsRenderer(plan).render()
+    assert "_install_hardlink('/usr/share/foo', '/usr/lib/alias')" in output
+    assert 'target_path = _normalise_hardlink_target(member.linkname)' in output
