@@ -36,3 +36,15 @@ def test_unsatisfied_strict_version_constraint_is_not_mapped():
             assert run.call_args_list[-1].args[0] == [
                 "dpkg", "--compare-versions", "3.12", ">>", "3.12"
             ]
+
+
+def test_any_qualifier_stays_a_reviewable_suggestion():
+    from pisicevir.analysis.dependency_resolution import canonical_debian_package_name
+    group = parse_dependency_expression("python3:any")[0]
+    assert canonical_debian_package_name(group) == "python3"
+
+
+def test_alternatives_are_not_auto_mapped_without_a_selected_target():
+    from pisicevir.analysis.dependency_resolution import canonical_debian_package_name
+    group = parse_dependency_expression("python3 | pypy3")[0]
+    assert canonical_debian_package_name(group) is None
