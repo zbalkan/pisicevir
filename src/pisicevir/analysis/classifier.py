@@ -179,17 +179,33 @@ class Classifier:
                 "exit 0;",
                 ":",
             }
-            for line in executable_lines:
+            helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
+            conditional = (
+                r"if command -v (py3compile|py3clean) >/dev/null; then\\s+"
+                r"(" + helper + r");\\s*fi"
+            )
+            index = 0
+            while index < len(executable_lines):
+                line = executable_lines[index]
                 if line in harmless:
+                    index += 1
                     continue
-                helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
-                conditional = (
-                    r"if command -v py3compile >/dev/null; then "
-                    + helper
-                    + r"; fi"
-                )
-                if re.fullmatch(helper, line) or re.fullmatch(conditional, line):
+                if re.fullmatch(helper, line):
                     saw_python_helper = True
+                    index += 1
+                    continue
+                # Only recognize a fixed helper-only conditional, including
+                # its multiline spelling. Arbitrary shell is never whitelisted.
+                candidate = " ".join(executable_lines[index:index + 3])
+                matched = re.fullmatch(conditional, candidate)
+                if matched and matched.group(1) in matched.group(2):
+                    saw_python_helper = True
+                    index += 3
+                    continue
+                matched = re.fullmatch(conditional, line)
+                if matched and matched.group(1) in matched.group(2):
+                    saw_python_helper = True
+                    index += 1
                     continue
                 return False
         return saw_python_helper
