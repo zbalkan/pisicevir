@@ -61,7 +61,7 @@ class DebAdapter:
             conffiles=conffiles,
             triggers=triggers,
         )
-        return inspection.dict()
+        return inspection.model_dump()
 
     def _ar_members(self) -> List[str]:
         result = subprocess.run(
