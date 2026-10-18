@@ -49,7 +49,7 @@ class Classifier:
     ):
         self.metadata = metadata
         self.payload = [
-            item if isinstance(item, PayloadEntry) else PayloadEntry.parse_obj(item)
+            item if isinstance(item, PayloadEntry) else PayloadEntry.model_validate(item)
             for item in payload
         ]
         self.maintainer_scripts = maintainer_scripts or {}
