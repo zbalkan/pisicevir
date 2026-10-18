@@ -93,10 +93,24 @@ def _apt_dependency_groups(package: str, *, runner=subprocess.run) -> list[tuple
         match = _DEPENDENCY_LINE_RE.match(line)
         if match is None:
             continue
-        alternatives.append(match.group(1))
-        if not line.lstrip().startswith("|"):
-            groups.append(tuple(alternatives))
-            alternatives = []
+        candidate = match.group(1)
+        if line.lstrip().startswith("|"):
+            if alternatives:
+                alternatives.append(candidate)
+            elif groups:
+                # Some apt-cache versions print a base candidate before
+                # alternatives; keep them in one OR group.
+                alternatives = list(groups.pop())
+                alternatives.append(candidate)
+            else:
+                alternatives = [candidate]
+        else:
+            if alternatives:
+                alternatives.append(candidate)
+                groups.append(tuple(alternatives))
+                alternatives = []
+            else:
+                groups.append((candidate,))
     if alternatives:
         groups.append(tuple(alternatives))
     return groups
