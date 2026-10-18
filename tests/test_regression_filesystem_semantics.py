@@ -30,8 +30,8 @@ def test_reject_symlink_with_descendant_target(tmp_path):
 
 def test_relocated_relative_symlink_target_is_rebased():
     plan = {"install": {"relocate": [
-        {"source": "payload/usr/bin/tool", "target": "/opt/bin/tool", "kind": "symlink", "link_target": "../lib/tool"},
+        {"source": "payload/usr/bin/tool", "target": "/opt/tools/bin/tool", "kind": "symlink", "link_target": "../lib/tool"},
         {"source": "payload/usr/lib/tool", "target": "/opt/lib/tool", "kind": "file"},
     ]}}
     content = ActionsRenderer(plan).render()
-    assert "pisitools.dosym('../lib/tool', '/opt/bin/tool')" in content
+    assert "pisitools.dosym('../../lib/tool', '/opt/tools/bin/tool')" in content
