@@ -21,6 +21,8 @@ def canonical_debian_package_name(group: DebianDependencyGroup) -> str | None:
     alternative = group.alternatives[0]
     if alternative.architecture_restrictions or alternative.build_profiles:
         return None
+    if alternative.architecture_qualifier not in (None, "native"):
+        return None
     return alternative.package
 
 
@@ -52,6 +54,22 @@ def installed_dependency_mappings(
                 else DebianDependencyGroup(**group)
             )
             package = canonical_debian_package_name(model)
-            if package and is_debian_package_installed(package):
-                mappings[model.raw] = package
+            if not package or not is_debian_package_installed(package):
+                continue
+            alternative = model.alternatives[0]
+            if alternative.operator is not None:
+                version_result = subprocess.run(
+                    ["dpkg-query", "-W", "-f=${Version}", package],
+                    capture_output=True, text=True, check=False,
+                )
+                if version_result.returncode != 0 or not version_result.stdout.strip():
+                    continue
+                comparison = subprocess.run(
+                    ["dpkg", "--compare-versions", version_result.stdout.strip(),
+                     alternative.operator, alternative.version],
+                    capture_output=True, text=True, check=False,
+                )
+                if comparison.returncode != 0:
+                    continue
+            mappings[model.raw] = package
     return mappings
