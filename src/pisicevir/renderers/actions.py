@@ -18,6 +18,12 @@ from pisi.actionsapi import get, pisitools
 _OPERATIONS = {operations!r}
 _SELECTED = {{item["source"].removeprefix("payload/") for item in _OPERATIONS}}
 _MAX_MEMBER_SIZE = 2 * 1024 * 1024 * 1024
+_MAX_EXTRACTED_SIZE = 2 * 1024 * 1024 * 1024
+_ALLOWED_AR_MEMBERS = {{
+    "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
+    "control.tar.zst", "control.tar.bz2", "data.tar", "data.tar.gz",
+    "data.tar.xz", "data.tar.zst", "data.tar.bz2",
+}}
 
 
 def _normalise_path(raw_path):
@@ -89,7 +95,7 @@ def _read_ar_data_member(package_path, destination_dir):
             name = header[0:16].decode("ascii", errors="strict").strip()
             if name.endswith("/"):
                 name = name[:-1]
-            if not name or name.startswith("/"):
+            if name not in _ALLOWED_AR_MEMBERS:
                 raise RuntimeError("Unsupported ar member name: %r" % name)
             try:
                 size = int(header[48:58].decode("ascii").strip())
@@ -158,6 +164,7 @@ def _extract_selected(archive_path, payload_root):
     seen = set()
     link_paths = set()
     deferred_links = []
+    extracted_size = 0
     archive, reader, compressed = _open_payload_archive(archive_path)
     try:
         for member in archive:
@@ -186,6 +193,11 @@ def _extract_selected(archive_path, payload_root):
                 destination.mkdir(parents=True, exist_ok=True)
                 destination.chmod(member.mode & 0o7777)
             elif member.isfile():
+                if member.size < 0 or member.size > _MAX_MEMBER_SIZE:
+                    raise RuntimeError("Payload member exceeds extraction limit: %s" % relative_path)
+                extracted_size += member.size
+                if extracted_size > _MAX_EXTRACTED_SIZE:
+                    raise RuntimeError("Debian payload exceeds total extraction limit")
                 source = archive.extractfile(member)
                 if source is None:
                     raise RuntimeError("Unable to read payload file: %s" % relative_path)
