@@ -182,7 +182,7 @@ class Classifier:
             for line in executable_lines:
                 if line in harmless:
                     continue
-                helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
+                helper = r"(?:/usr/bin/)?py3(?:compile|clean)(?:\s+(?:-[A-Za-z]+|[A-Za-z0-9_./+-]+))*"
                 conditional = (
                     r"if command -v py3compile >/dev/null; then "
                     + helper
