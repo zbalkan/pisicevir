@@ -174,11 +174,14 @@ def _extractor_functions(plan):
         "_SELECTED": {op["source"][8:] for op in plan["install"]["preserve"]},
         "_MAX_MEMBER_SIZE": 2 * 1024 * 1024 * 1024,
         "_MAX_EXTRACTED_SIZE": 2 * 1024 * 1024 * 1024,
-        "_ALLOWED_AR_MEMBERS": {
-            "debian-binary", "control.tar", "control.tar.gz", "control.tar.xz",
-            "control.tar.zst", "control.tar.bz2", "control.tar.lzma", "data.tar", "data.tar.gz",
-            "data.tar.xz", "data.tar.zst", "data.tar.bz2", "data.tar.lzma",
-        },
+        "_ALLOWED_AR_MEMBERS": ast.literal_eval(next(
+            node.value for node in tree.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "_ALLOWED_AR_MEMBERS"
+                for target in node.targets
+            )
+        )),
     }
     exec(compile(ast.Module(body=functions, type_ignores=[]), "<generated>", "exec"), ns)
     return ns
