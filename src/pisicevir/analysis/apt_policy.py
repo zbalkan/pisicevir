@@ -47,25 +47,23 @@ def first_blocked_systemd_dependency(
     installation command, so callers can show a policy-specific error instead of
     APT's generic dependency failure.
     """
-    queue: deque[tuple[str, tuple[str, ...]]] = deque(
-        [(requested_package, (requested_package,))]
-    )
-    visited: set[str] = set()
-
-    while queue:
-        package, path = queue.popleft()
-        if package in visited:
-            continue
-        visited.add(package)
-
+    # Alternatives form OR-groups; only an unavoidable blocked choice fails.
+    def check(package: str, path: tuple[str, ...]) -> tuple[str, ...] | None:
         if is_systemd_related_package(package):
-            return BlockedDependency(requested_package, package, path)
+            return path
+        if package in path[:-1]:
+            return None
+        for group in _apt_dependency_groups(package, runner=runner):
+            failures = [check(candidate, (*path, candidate)) for candidate in group]
+            if failures and all(failure is not None for failure in failures):
+                return failures[0]
+        return None
 
-        for dependency in _apt_dependencies(package, runner=runner):
-            if dependency not in visited:
-                queue.append((dependency, (*path, dependency)))
-
-    return None
+    failure = check(requested_package, (requested_package,))
+    return (
+        BlockedDependency(requested_package, failure[-1], failure)
+        if failure is not None else None
+    )
 
 
 def _apt_dependencies(package: str, *, runner=subprocess.run) -> list[str]:
@@ -79,6 +77,30 @@ def _apt_dependencies(package: str, *, runner=subprocess.run) -> list[str]:
         stderr = (result.stderr or "").strip()
         raise AptPolicyError(f"Unable to resolve dependencies for {package}: {stderr}")
     return list(_parse_apt_cache_depends(result.stdout.splitlines()))
+
+
+def _apt_dependency_groups(package: str, *, runner=subprocess.run) -> list[tuple[str, ...]]:
+    result = runner(
+        ["apt-cache", "depends", "--no-recommends", "--no-suggests", package],
+        check=False, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        raise AptPolicyError(
+            f"Unable to resolve dependencies for {package}: {(result.stderr or '').strip()}"
+        )
+    groups: list[tuple[str, ...]] = []
+    alternatives: list[str] = []
+    for line in result.stdout.splitlines():
+        match = _DEPENDENCY_LINE_RE.match(line)
+        if match is None:
+            continue
+        alternatives.append(match.group(1))
+        if not line.lstrip().startswith("|"):
+            groups.append(tuple(alternatives))
+            alternatives = []
+    if alternatives:
+        groups.append(tuple(alternatives))
+    return groups
 
 
 def _parse_apt_cache_depends(lines: Iterable[str]) -> Iterable[str]:
