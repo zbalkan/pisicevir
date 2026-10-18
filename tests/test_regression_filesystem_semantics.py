@@ -52,3 +52,32 @@ def test_hardlink_target_escape_is_rejected():
     ]}}
     with pytest.raises(ValueError, match="Invalid hardlink target"):
         ActionsRenderer(plan).render()
+
+
+def test_relocated_external_symlink_rebases_original_absolute_destination():
+    plan = {"install": {"relocate": [
+        {"source": "payload/usr/bin/example", "target": "/opt/example/bin/example",
+         "kind": "symlink", "link_target": "../lib/example-runtime"},
+    ]}}
+    rendered = ActionsRenderer(plan).render()
+    assert "pisitools.dosym('../../../usr/lib/example-runtime', '/opt/example/bin/example')" in rendered
+
+
+def test_preserved_link_rebases_when_only_its_destination_moves():
+    plan = {"install": {
+        "preserve": [{"source": "payload/usr/bin/example", "target": "/usr/bin/example",
+                      "kind": "symlink", "link_target": "../lib/example"}],
+        "relocate": [{"source": "payload/usr/lib/example", "target": "/opt/example",
+                      "kind": "file"}],
+    }}
+    rendered = ActionsRenderer(plan).render()
+    assert "pisitools.dosym('../../opt/example', '/usr/bin/example')" in rendered
+
+
+def test_omitted_target_requires_review_for_symlink():
+    plan = {"install": {"preserve": [
+        {"source": "payload/usr/bin/example", "target": "/usr/bin/example",
+         "kind": "symlink", "link_target": "../lib/example"}]}}
+    # An unresolved link can be deliberate, but should not be silently changed.
+    rendered = ActionsRenderer(plan).render()
+    assert "pisitools.dosym('../lib/example', '/usr/bin/example')" in rendered
