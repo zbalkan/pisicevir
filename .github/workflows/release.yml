@@ -56,19 +56,18 @@ jobs:
             build-essential \
             debhelper \
             devscripts \
-            dh-python \
+            dh-virtualenv \
+            python3-venv \
+            python3-pip \
             dpkg-dev \
             fakeroot \
             libegl1 \
             libgl1 \
             libxkbcommon-x11-0 \
             lintian \
-            pybuild-plugin-pyproject \
             python3-all \
             python3-build \
             python3-wheel \
-            python3-pydantic \
-            python3-pyqt5 \
             python3-pytest \
             python3-pytestqt \
             python3-setuptools \
@@ -185,8 +184,8 @@ jobs:
           sudo apt-get install -qq --yes /tmp/pisicevir-build-1/*.deb
           /usr/bin/pisicevir --version
           /usr/bin/pisicevir --help >/dev/null
-          /usr/bin/python3 -c 'import pisicevir; print(pisicevir.__version__)'
-          QT_QPA_PLATFORM=offscreen /usr/bin/python3 -c \
+          /opt/venvs/pisicevir/bin/python -c 'import pisicevir; print(pisicevir.__version__)'
+          QT_QPA_PLATFORM=offscreen /opt/venvs/pisicevir/bin/python -c \
             'from pisicevir.gui import PisicevirGUI; print(PisicevirGUI)'
 
       - name: Build dogfood PISI recipe archive

@@ -12,32 +12,22 @@ Priority: optional
 Maintainer: {maintainer_name} <{maintainer_email}>
 Build-Depends:
  debhelper-compat (= 13),
- dh-sequence-python3,
- pybuild-plugin-pyproject,
- python3-all,
- python3-build,
- python3-wheel,
- python3-setuptools,
- python3-pytest,
- python3-pytestqt,
- python3-yaml,
- python3-pydantic (>= 2.7),
- python3-zstandard,
- python3-pyqt5,
+ dh-virtualenv,
+ python3,
+ python3-venv,
+ python3-pip,
  binutils
 Rules-Requires-Root: no
 Standards-Version: 4.6.2
 Homepage: {homepage}
 
 Package: pisicevir
-Architecture: all
+Architecture: any
 Depends:
  ${{misc:Depends}},
- ${{python3:Depends}},
- binutils,
- python3-yaml,
- python3-pydantic (>= 2.7),
- python3-zstandard
+ ${{shlibs:Depends}},
+ python3 (>= 3.10),
+ binutils
 Description: external package importer and PISI recipe generator
  Pisicevir inspects external package artifacts, classifies conversion risk,
  and generates reviewable native PISI packaging projects. Debian package
@@ -49,8 +39,7 @@ Architecture: all
 Depends:
  ${{misc:Depends}},
  ${{python3:Depends}},
- pisicevir (= ${{binary:Version}}),
- python3-pyqt5
+ pisicevir (= ${{binary:Version}})
 Description: graphical workbench for Pisicevir
  This package provides the optional Qt workbench for inspecting Debian
  packages and reviewing transformation plans and lint findings.
@@ -58,16 +47,15 @@ Description: graphical workbench for Pisicevir
 
 RULES = """#!/usr/bin/make -f
 
-export PYBUILD_TEST_ARGS=-ra -p no:cacheprovider --ignore=tests/test_release_tools.py
 export QT_QPA_PLATFORM=offscreen
 export PYTHONHASHSEED=0
 export PATH := /usr/sbin:/usr/bin:/sbin:/bin
 
 %:
-\tdh $@ --buildsystem=pybuild
+\tdh $@ --with python-virtualenv
 
-override_dh_auto_install:
-\tdh_auto_install --buildsystem=pybuild --destdir=$(CURDIR)/debian/tmp
+override_dh_virtualenv:
+\tdh_virtualenv -p pisicevir --python /usr/bin/python3 --requirements debian/venv-requirements.txt
 """
 
 DESKTOP = """[Desktop Entry]
@@ -102,8 +90,8 @@ set -eu
 
 pisicevir --version
 pisicevir --help >/dev/null
-python3 -c 'import pisicevir; print(pisicevir.__version__)'
-python3 -c 'from pisicevir.source_adapters.deb import DebAdapter; print(DebAdapter)'
+/opt/venvs/pisicevir/bin/python -c 'import pisicevir; print(pisicevir.__version__)'
+/opt/venvs/pisicevir/bin/python -c 'from pisicevir.source_adapters.deb import DebAdapter; print(DebAdapter)'
 """
 
 PISICEVIR_MANPAGE = r""".TH PISICEVIR 1 "" "Pisicevir" "User Commands"
@@ -194,6 +182,7 @@ def generate(
         ),
     )
     write(output / "rules", RULES, mode=0o755)
+    write(output / "venv-requirements.txt", ".[gui]\n")
     write(output / "source/format", "3.0 (quilt)\n")
     write(
         output / "copyright",
@@ -214,14 +203,17 @@ def generate(
         LINTIAN_OVERRIDES.format(package="pisicevir-gui"),
     )
     write(
-        output / "pisicevir.install",
-        "usr/bin/pisicevir\n"
-        "usr/lib/python3*/dist-packages/pisicevir\n"
-        "usr/lib/python3*/dist-packages/pisicevir-*.dist-info\n",
+        output / "pisicevir.links",
+        "opt/venvs/pisicevir/bin/pisicevir usr/bin/pisicevir\n",
+    )
+    write(
+        output / "pisicevir-gui",
+        '#!/bin/sh\nexec /opt/venvs/pisicevir/bin/pisicevir-gui "$@"\n',
+        mode=0o755,
     )
     write(
         output / "pisicevir-gui.install",
-        "usr/bin/pisicevir-gui\n"
+        "debian/pisicevir-gui usr/bin\n"
         "debian/org.caracal.Pisicevir.desktop usr/share/applications\n",
     )
     write(output / "pisicevir.manpages", "debian/pisicevir.1\n")
