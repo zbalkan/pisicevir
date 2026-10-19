@@ -58,7 +58,7 @@ def test_debian_packaging_generation_is_deterministic() -> None:
 
         control = (first / "control").read_text(encoding="utf-8")
         rules = (first / "rules").read_text(encoding="utf-8")
-        cli_manifest = (first / "pisicevir.install").read_text(encoding="utf-8")
+        cli_manifest = (first / "pisicevir.links").read_text(encoding="utf-8")
         gui_manifest = (first / "pisicevir-gui.install").read_text(encoding="utf-8")
         cli_manpage = (first / "pisicevir.1").read_text(encoding="utf-8")
         gui_manpage = (first / "pisicevir-gui.1").read_text(encoding="utf-8")
@@ -67,12 +67,15 @@ def test_debian_packaging_generation_is_deterministic() -> None:
         cli_overrides = (first / "pisicevir.lintian-overrides").read_text(encoding="utf-8")
         gui_overrides = (first / "pisicevir-gui.lintian-overrides").read_text(encoding="utf-8")
 
-        assert "python3-build" in control
-        assert "python3-wheel" in control
+        assert "dh-virtualenv" in control
+        assert "python3-pydantic (>= 2.7)" not in control
+        assert "Architecture: any" in control
+        assert "python3-venv" in control
         assert "PYBUILD_NAME" not in rules
         assert "export PATH := /usr/sbin:/usr/bin:/sbin:/bin" in rules
-        assert "-p no:cacheprovider" in rules
-        assert "--destdir=$(CURDIR)/debian/tmp" in rules
+        assert "dh_virtualenv -p pisicevir" in rules
+        assert "--requirements debian/venv-requirements.txt" in rules
+        assert (first / "venv-requirements.txt").read_text(encoding="utf-8").strip() == ".[gui]"
         assert "org.caracal.Pisicevir.desktop" in gui_manifest
         assert "org.caracal.Pisicevir.desktop" not in cli_manifest
         assert ".TH PISICEVIR 1" in cli_manpage
