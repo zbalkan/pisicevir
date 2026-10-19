@@ -185,8 +185,8 @@ jobs:
           sudo apt-get install -qq --yes /tmp/pisicevir-build-1/*.deb
           /usr/bin/pisicevir --version
           /usr/bin/pisicevir --help >/dev/null
-          /usr/bin/python3 -c 'import pisicevir; print(pisicevir.__version__)'
-          QT_QPA_PLATFORM=offscreen /usr/bin/python3 -c \
+          /opt/venvs/pisicevir/bin/python -c 'import pisicevir; print(pisicevir.__version__)'
+          QT_QPA_PLATFORM=offscreen /opt/venvs/pisicevir/bin/python -c \
             'from pisicevir.gui import PisicevirGUI; print(PisicevirGUI)'
 
       - name: Build dogfood PISI recipe archive
