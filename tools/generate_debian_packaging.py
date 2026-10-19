@@ -207,7 +207,7 @@ def generate(
     )
     write(
         output / "pisicevir-gui",
-        "#!/bin/sh\\nexec /opt/venvs/pisicevir/bin/pisicevir-gui \\"$@\\"\n",
+        '#!/bin/sh\\nexec /opt/venvs/pisicevir/bin/pisicevir-gui "$@"\\n',
         mode=0o755,
     )
     write(
