@@ -37,7 +37,7 @@ test = [
     "pytest>=7.4,<10",
     "pytest-qt>=4.2,<5",
     "ruff>=0.9,<1",
-    "mypy>=1.13,<2",
+    "mypy>=1.13,<3",
 ]
 
 [project.urls]
