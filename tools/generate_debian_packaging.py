@@ -91,7 +91,7 @@ set -eu
 pisicevir --version
 pisicevir --help >/dev/null
 /opt/venvs/pisicevir/bin/python -c 'import pisicevir; print(pisicevir.__version__)'
-python3 -c 'from pisicevir.source_adapters.deb import DebAdapter; print(DebAdapter)'
+/opt/venvs/pisicevir/bin/python -c 'from pisicevir.source_adapters.deb import DebAdapter; print(DebAdapter)'
 """
 
 PISICEVIR_MANPAGE = r""".TH PISICEVIR 1 "" "Pisicevir" "User Commands"
@@ -182,7 +182,7 @@ def generate(
         ),
     )
     write(output / "rules", RULES, mode=0o755)
-    write(output / "venv-requirements.txt", ".[gui]\\n")
+    write(output / "venv-requirements.txt", ".[gui]\n")
     write(output / "source/format", "3.0 (quilt)\n")
     write(
         output / "copyright",
@@ -208,7 +208,7 @@ def generate(
     )
     write(
         output / "pisicevir-gui",
-        '#!/bin/sh\\nexec /opt/venvs/pisicevir/bin/pisicevir-gui "$@"\\n',
+        '#!/bin/sh\nexec /opt/venvs/pisicevir/bin/pisicevir-gui "$@"\n',
         mode=0o755,
     )
     write(
