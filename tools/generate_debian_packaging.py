@@ -55,7 +55,7 @@ export PATH := /usr/sbin:/usr/bin:/sbin:/bin
 \tdh $@ --with python-virtualenv
 
 override_dh_virtualenv:
-\tdh_virtualenv -p pisicevir --python /usr/bin/python3
+\tdh_virtualenv -p pisicevir --python /usr/bin/python3 --requirements debian/venv-requirements.txt
 """
 
 DESKTOP = """[Desktop Entry]
@@ -182,6 +182,7 @@ def generate(
         ),
     )
     write(output / "rules", RULES, mode=0o755)
+    write(output / "venv-requirements.txt", ".[gui]\\n")
     write(output / "source/format", "3.0 (quilt)\n")
     write(
         output / "copyright",
